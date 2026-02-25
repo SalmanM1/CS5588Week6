@@ -89,7 +89,7 @@ Provides **faster time-to-answer** with **higher trust** by returning an evidenc
 
 ## Deployed Application
 
-**Live App:** [https://trupharm.streamlit.app/]([https://trupharm.streamlit.app/](https://trupharma-clinical-intelligence-fhu8qhqrgjch9yhocjaeuz.streamlit.app/))
+**Live App:** https://trupharma-clinical-intelligence-fhu8qhqrgjch9yhocjaeuz.streamlit.app/
 
 ---
 
