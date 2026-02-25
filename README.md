@@ -97,8 +97,8 @@ Provides **faster time-to-answer** with **higher trust** by returning an evidenc
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/SalmanM1/CS5588-Deployment.git
-cd CS5588-Deployment
+git https://github.com/reddy-nithin/TruPharma-Clinical-Intelligence
+cd TruPharma-Clinical-Intelligence
 
 # 2. Create a virtual environment (recommended)
 python -m venv .venv
@@ -108,8 +108,11 @@ python -m venv .venv
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Run the Streamlit app
-streamlit run src/app/streamlit_app.py
+# 4. Build the knowledge graph
+python3 scripts/build_kg.py
+
+# 5. Run the Streamlit app
+streamlit run src/frontend/app.py
 ```
 
 ### Optional: Gemini LLM
@@ -176,7 +179,7 @@ Week-4-Assignment--main/
 │   ├── Week 4.ipynb               # Development notebook
 │   └── app/
 │       ├── .streamlit/config.toml # Streamlit theme config
-│       ├── streamlit_app.py       # Main app (Primary Demo)
+│       ├── streamlit_app.py       # Main app (Safety Chat)
 │       └── pages/
 │           └── stress_test.py     # Stress test / scenario validation
 ├── requirements.txt

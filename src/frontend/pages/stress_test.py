@@ -2,7 +2,7 @@
 TruPharma  ·  Stress Test / Scenario Validation
 =================================================
 Runs edge-case queries through the real RAG pipeline and compares
-behaviour against the primary demo baseline.
+behaviour against the Safety Chat baseline.
 """
 
 import sys
@@ -14,6 +14,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 import streamlit as st
+import streamlit.components.v1 as components
 import time
 from datetime import datetime
 
@@ -24,7 +25,22 @@ st.set_page_config(
     page_title="Stress Test | Scenario Validation",
     page_icon="⚠️",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
+
+# ─── Force-expand sidebar on subpages after navigation ───────
+components.html("""
+<script>
+(function() {
+    const doc = window.parent.document;
+    const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+    if (sidebar && sidebar.getAttribute('aria-expanded') === 'false') {
+        const btn = doc.querySelector('[data-testid="collapsedControl"]');
+        if (btn) btn.click();
+    }
+})();
+</script>
+""", height=0)
 
 # ─── Hide built-in nav ───────────────────────────────────────
 st.markdown("""
@@ -33,7 +49,6 @@ div[data-testid="stSidebarNav"] { display: none !important; }
 section[data-testid="stSidebar"] nav { display: none !important; }
 section[data-testid="stSidebar"] ul[role="list"] { display: none !important; }
 section[data-testid="stSidebar"] > div:first-child { padding-top: 0rem !important; }
-/* Hide the auto-generated page nav links only, not collapse buttons */
 section[data-testid="stSidebar"] ul[data-testid="stSidebarNavItems"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -103,8 +118,8 @@ span[class*="icon"] {
 #  SIDEBAR
 # ══════════════════════════════════════════════════════════════
 st.sidebar.markdown("<div style='font-size:15px;font-weight:800;margin:10px 0 8px;'>Scenario Mode</div>", unsafe_allow_html=True)
-if st.sidebar.button("⬅ Return to Primary Demo", key="go_primary"):
-    st.switch_page("app.py")
+if st.sidebar.button("⬅ Return to Safety Chat", key="go_safety_chat"):
+    st.switch_page("pages/primary_demo.py")
 
 st.sidebar.markdown(
     "<div class='scenario-card stress-active'>"
@@ -135,7 +150,7 @@ run = st.sidebar.button("Run Stress Test", type="primary", width="stretch")
 # ══════════════════════════════════════════════════════════════
 if "primary_last_run" not in st.session_state:
     st.session_state.primary_last_run = {
-        "query": "(run a primary demo query first)",
+        "query": "(run a Safety Chat query first)",
         "confidence": "—",
         "evidence_count": 0,
     }
@@ -185,10 +200,10 @@ st.markdown(
 # ══════════════════════════════════════════════════════════════
 left, right = st.columns(2, gap="large")
 
-# ── Primary Demo Scenario (from last main-page run) ──
+# ── Safety Chat Scenario (from last Safety Chat run) ──
 with left:
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    st.markdown("<div class='panel-header primary'>Primary Demo Scenario</div>", unsafe_allow_html=True)
+    st.markdown("<div class='panel-header primary'>Safety Chat Scenario</div>", unsafe_allow_html=True)
     st.markdown("<div class='panel-subheader'>Normal user workflow</div>", unsafe_allow_html=True)
 
     p = st.session_state.primary_last_run
@@ -270,12 +285,27 @@ with right:
         st.markdown(f"- **Confidence:** {sr['confidence']:.0%}")
         st.markdown(f"- **Evidence count:** {len(sr['evidence'])}")
         st.markdown(f"- **Records fetched:** {sr['num_records']}")
-        ev_ids = [e["cite"] for e in sr["evidence"]]
-        st.markdown(f"- **Evidence IDs:** {', '.join(ev_ids[:5])}")
+        ev_labels = [e["cite"] for e in sr["evidence"]]
+        st.markdown(f"- **Evidence:** {', '.join(ev_labels[:5])}")
         st.markdown(f"- **LLM used:** {'Gemini' if sr['llm_used'] else 'Extractive fallback'}")
         st.markdown("---")
         st.markdown("**Answer preview:**")
-        st.write(sr["answer"][:400])
+        import re as _re
+        _ans = sr["answer"]
+        for _j, _ev in enumerate(sr["evidence"], 1):
+            raw = _ev.get("_raw_id", "")
+            if raw:
+                _ans = _ans.replace(f"[{raw}]", f"[Evidence {_j}]")
+        def _repl(m):
+            inner = m.group(1)
+            if _re.match(r"Evidence \d+", inner):
+                return m.group(0)
+            for _k, _e in enumerate(sr["evidence"], 1):
+                if _e.get("doc_id", "") in inner or _e.get("field", "") in inner:
+                    return f"[Evidence {_k}]"
+            return m.group(0)
+        _ans = _re.sub(r"\[([^\]]+)\]", _repl, _ans)
+        st.write(_ans[:400])
     else:
         st.info("Run a stress test to populate logs.")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -294,7 +324,7 @@ with c1:
     st.markdown("<div class='panel-header primary'>Success Criteria</div>", unsafe_allow_html=True)
     st.markdown("""
     <div class='criteria-body'>
-      ✅ Primary demo returns evidence-backed answers with citations.<br>
+      ✅ Safety Chat returns evidence-backed answers with citations.<br>
       ✅ Latency under 30 seconds per query.<br>
       ✅ Confidence and evidence IDs logged to CSV.
     </div>

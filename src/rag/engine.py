@@ -163,7 +163,7 @@ def _try_rerank(query, items, top_k):
 _RAG_SYSTEM = (
     "You are TruPharma Assistant, a medical drug-label information tool.\n"
     "Answer the question using ONLY the retrieved FDA drug-label evidence below.\n"
-    "Cite every key claim with the bracket notation shown (e.g. [record_id::field]).\n"
+    "Cite every key claim with the bracket notation shown (e.g. [Evidence 1]).\n"
     "Keep the answer concise (3-6 sentences). If the evidence is insufficient, "
     "respond exactly:\n"
     '"Not enough evidence in the retrieved context."'
@@ -343,6 +343,7 @@ def run_rag_query(
             "confidence": 0.0,
             "num_records": 0,
             "search_query": search_q,
+            "drug_name": _extract_drug_name(query),
             "prompt": "",
             "llm_used": False,
             "method": method,
@@ -377,15 +378,16 @@ def run_rag_query(
     else:
         items = items[:top_k]
 
-    # 5 ── Build evidence pack
+    # 5 ── Build evidence pack (keep raw chunk_id for post-processing)
     evidence = [
         {
-            "cite": f"[{it.chunk_id}]",
+            "cite": f"[Evidence {i}]",
+            "_raw_id": it.chunk_id,
             "content": it.text[:1200],
             "doc_id": it.doc_id,
             "field": it.field,
         }
-        for it in items
+        for i, it in enumerate(items, 1)
     ]
 
     # 6 ── Generate answer (Gemini LLM or extractive fallback)
@@ -400,6 +402,11 @@ def run_rag_query(
 
     if answer is None:
         answer = _fallback_answer(query, evidence)
+
+    # 6b ── Normalize citations: replace any raw chunk IDs the LLM
+    #        may have emitted with the clean [Evidence N] labels.
+    for ev in evidence:
+        answer = answer.replace(f"[{ev['_raw_id']}]", ev["cite"])
 
     # 7 ── Compute confidence
     conf = _confidence(evidence, answer)
@@ -437,6 +444,7 @@ def run_rag_query(
             kg_data["kg_reactions"] = kg.get_drug_reactions(lookup)
             kg_data["kg_ingredients"] = kg.get_ingredients(lookup)
             kg_data["kg_available"] = True
+            kg_data["_drug_name"] = drug_name
     except Exception:
         pass  # Graceful degradation
 
@@ -462,6 +470,7 @@ def run_rag_query(
         "confidence": conf,
         "num_records": n_recs,
         "search_query": search_q,
+        "drug_name": kg_data.get("_drug_name", _extract_drug_name(query)),
         "prompt": prompt,
         "llm_used": llm_used,
         "method": method,
