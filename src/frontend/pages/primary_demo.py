@@ -17,6 +17,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime
 import time
+import base64
 
 from src.rag.engine import run_rag_query, read_logs
 
@@ -156,6 +157,8 @@ def set_panel(name: str):
 #  SIDEBAR
 # ══════════════════════════════════════════════════════════════
 if st.sidebar.button("⬅ Return to Home", key="go_home"):
+    for k in ["active_panel", "result", "logs", "show_risk_calc", "primary_last_run"]:
+        st.session_state.pop(k, None)
     st.switch_page("app.py")
 
 st.sidebar.title("Scenario Mode")
@@ -560,10 +563,10 @@ body{{margin:0;padding:0;background:transparent;font-family:"Times New Roman",se
 </style></head><body>
 <div id="kg-root">
   <div id="kg-toolbar">
-    <input id="kg-search" placeholder="Search nodes..." autocomplete="off"/>
-    <button class="tb-btn" id="kg-focus-btn" title="Highlight selected node and its connections">Focus</button>
-    <button class="tb-btn" id="kg-reset-btn" title="Restore all nodes and zoom">Reset</button>
-    <button class="tb-btn" id="kg-fit-btn" title="Auto-fit graph to window">Fit</button>
+    <input id="kg-search" placeholder="Search nodes..." autocomplete="off" title="Type to filter nodes by name — matching nodes stay visible while others fade out"/>
+    <button class="tb-btn" id="kg-focus-btn" title="Click a node first, then press Focus to isolate it and its direct connections">Focus</button>
+    <button class="tb-btn" id="kg-reset-btn" title="Clear all filters and restore the full graph to its original state">Reset</button>
+    <button class="tb-btn" id="kg-fit-btn" title="Zoom and pan to fit the entire graph within the view">Fit</button>
   </div>
   <div id="kg-net"></div>
   <div id="kg-detail">
@@ -1080,10 +1083,12 @@ def render_kg():
                     "<div class='value' style='font-size:15px;color:#7c3aed'>Analyze My Risk</div>"
                     "<div class='sub'>Based on your patient context</div></div>",
                     unsafe_allow_html=True)
-                if st.button("Open Assessment", key="kg_risk_toggle",
-                             use_container_width=True, type="primary"):
-                    st.session_state["show_risk_calc"] = \
-                        not st.session_state.get("show_risk_calc", False)
+                _risk_open = st.session_state.get("show_risk_calc", False)
+                _risk_label = "Close Assessment" if _risk_open else "Open Assessment"
+                _risk_type = "secondary" if _risk_open else "primary"
+                if st.button(_risk_label, key="kg_risk_toggle",
+                             use_container_width=True, type=_risk_type):
+                    st.session_state["show_risk_calc"] = not _risk_open
 
             # ── Personalized risk calculator (shown on toggle) ──
             if st.session_state.get("show_risk_calc", False):
@@ -1160,8 +1165,15 @@ def render_kg():
 
             if tab_labels:
                 tabs = st.tabs(tab_labels)
+                _tab_desc = {
+                    "ing": "Active and inactive ingredients listed on the drug label, with strengths where available.",
+                    "ix":  "Known drug-drug interactions sourced from FDA labels, ranked by severity.",
+                    "co":  "Drugs most frequently reported alongside this one in FDA adverse-event reports (FAERS).",
+                    "rx":  "Adverse reactions reported to the FDA, ranked by frequency in the FAERS database.",
+                }
                 for ti, (kind, items) in enumerate(tab_data):
                     with tabs[ti]:
+                        st.caption(_tab_desc[kind])
                         if kind == "ing":
                             pills = "".join(
                                 f"<span class='kg-pill ingredient'>{i['ingredient']}"
@@ -1320,88 +1332,199 @@ def map_symptoms_to_regions(symptoms: list[str]) -> dict[str, int]:
 
 
 def _build_body_heatmap_html(region_counts: dict[str, int], symptoms: list[str]) -> str:
-    """Return an SVG human body silhouette with regions colored by intensity."""
-    max_count = max((v for k, v in region_counts.items() if k != "unknown"), default=1) or 1
+    """Return HTML with the human body image overlaid with radial gradient circles."""
+    img_path = Path(__file__).resolve().parent.parent / "assets" / "images" / "humanbody.jpg"
+    img_b64 = base64.b64encode(img_path.read_bytes()).decode()
 
-    def _intensity(region: str) -> str:
-        c = region_counts.get(region, 0)
-        if c == 0:
-            return "fill:#e5e7eb"
-        frac = c / max_count
-        if frac > 0.66:
-            return "fill:#dc2626;fill-opacity:0.85"
-        elif frac > 0.33:
-            return "fill:#f59e0b;fill-opacity:0.75"
-        else:
-            return "fill:#3b82f6;fill-opacity:0.55"
-
-    def _label(region: str) -> str:
-        c = region_counts.get(region, 0)
-        return f"{region.title()} ({c})" if c else ""
-
+    body_max = max(
+        (v for k, v in region_counts.items() if k not in ("unknown", "skin", "systemic")),
+        default=1,
+    ) or 1
     total = sum(region_counts.values())
     unknown = region_counts.get("unknown", 0)
+
+    def _rgb(region: str) -> str | None:
+        c = region_counts.get(region, 0)
+        if c == 0:
+            return None
+        frac = c / body_max
+        if frac > 0.66:
+            return "220,38,38"
+        elif frac > 0.33:
+            return "245,158,11"
+        return "59,130,246"
+
+    def _size(region: str) -> int:
+        c = region_counts.get(region, 0)
+        if c == 0:
+            return 0
+        return 40 + int(40 * (c / body_max))
+
+    # Positions as % of the cropped front-figure view (left 52% of image)
+    region_positions: dict[str, list[dict[str, float]]] = {
+        "head":    [{"x": 47.5, "y": 8.6}],
+        "chest":   [{"x": 47.5, "y": 28.8}],
+        "abdomen": [{"x": 47.5, "y": 44.2}],
+        "arms":    [{"x": 17.5, "y": 34.0}, {"x": 77.3, "y": 34.0}],
+        "legs":    [{"x": 39.0, "y": 68.0}, {"x": 57.7, "y": 68.0}],
+    }
+
+    circles: list[str] = []
+    for region, positions in region_positions.items():
+        rgb = _rgb(region)
+        if not rgb:
+            continue
+        sz = _size(region)
+        cnt = region_counts.get(region, 0)
+        for i, pos in enumerate(positions):
+            label = f"<span class='cnt'>{cnt}</span>" if i == 0 else ""
+            circles.append(
+                f"<div class='heat-dot' style='"
+                f"left:{pos['x']}%;top:{pos['y']}%;"
+                f"width:{sz}px;height:{sz}px;"
+                f"background:radial-gradient(circle,"
+                f"rgba({rgb},0.85) 0%,rgba({rgb},0.45) 30%,"
+                f"rgba({rgb},0.15) 55%,transparent 72%);'>"
+                f"{label}</div>"
+            )
+    circles_html = "\n    ".join(circles)
+
+    skin_count = region_counts.get("skin", 0)
+    skin_overlay = ""
+    skin_legend = ""
+    if skin_count > 0:
+        sk_frac = skin_count / body_max
+        sk_hex = "#dc2626" if sk_frac > 0.66 else "#f59e0b" if sk_frac > 0.33 else "#3b82f6"
+        skin_overlay = (
+            f"<div style='position:absolute;left:6%;top:1%;width:87%;height:96%;"
+            f"border:2.5px dashed {sk_hex};border-radius:35%;opacity:0.55;"
+            f"pointer-events:none;z-index:1'></div>"
+        )
+        skin_legend = f"<span>| Dashed = Skin ({skin_count})</span>"
 
     return f"""<html><head><style>
 *{{box-sizing:border-box}}
 body{{margin:0;padding:0;background:transparent;font-family:"Times New Roman",serif}}
-.hm-wrap{{text-align:center;padding:4px}}
-.hm-title{{font-size:13px;font-weight:800;color:#374151;margin-bottom:2px}}
-.hm-sub{{font-size:11px;color:#9ca3af;margin-bottom:6px}}
-svg text{{font-family:"Times New Roman",serif}}
-.legend{{display:flex;justify-content:center;gap:12px;margin-top:6px;font-size:10px;color:#6b7280}}
+.bm-wrap{{text-align:center;padding:4px 0}}
+.bm-title{{font-size:13px;font-weight:800;color:#374151;margin-bottom:2px}}
+.bm-sub{{font-size:11px;color:#9ca3af;margin-bottom:6px}}
+.body-ctr{{position:relative;display:inline-block;width:220px;overflow:hidden;cursor:zoom-in}}
+.body-img{{display:block;width:192%;max-width:none;opacity:0.82}}
+.heat-dot{{position:absolute;border-radius:50%;transform:translate(-50%,-50%);
+  display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2}}
+.cnt{{font-size:11px;font-weight:800;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.6)}}
+.zoom-hint{{position:absolute;bottom:6px;right:6px;font-size:9px;color:#6b7280;
+  background:rgba(255,255,255,0.85);padding:2px 7px;border-radius:8px;z-index:3;
+  display:flex;align-items:center;gap:3px;pointer-events:none}}
+.legend{{display:flex;justify-content:center;gap:12px;margin-top:8px;font-size:10px;color:#6b7280}}
 .legend span{{display:inline-flex;align-items:center;gap:3px}}
-.ldot{{width:10px;height:10px;border-radius:2px;display:inline-block}}
+.ldot{{width:10px;height:10px;border-radius:50%;display:inline-block}}
+.how-to{{font-size:10px;color:#9ca3af;margin-top:6px;font-style:italic;line-height:1.4}}
+#zoom-overlay{{display:none;position:fixed;inset:0;z-index:9999;
+  background:rgba(0,0,0,0.82);flex-direction:column;
+  align-items:center;justify-content:center;cursor:pointer;
+  backdrop-filter:blur(6px)}}
+#zoom-inner{{background:#fff;border-radius:14px;padding:16px 20px 12px;
+  box-shadow:0 12px 48px rgba(0,0,0,0.45);position:relative;cursor:default;
+  max-width:90vw;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;align-items:center}}
+#zoom-inner .body-ctr{{width:min(420px,38vh)!important;cursor:default;overflow:hidden}}
+#zoom-inner .body-img{{opacity:1!important}}
+#zoom-inner .zoom-hint{{display:none}}
+#zoom-inner .cnt{{font-size:13px}}
+.zoom-x{{position:absolute;top:10px;right:14px;width:32px;height:32px;border-radius:50%;
+  background:rgba(0,0,0,0.08);border:none;cursor:pointer;display:flex;
+  align-items:center;justify-content:center;font-size:20px;color:#6b7280;
+  transition:background 0.2s,color 0.2s;z-index:10000}}
+.zoom-x:hover{{background:rgba(0,0,0,0.16);color:#1f2937}}
 </style></head><body>
-<div class="hm-wrap">
-  <div class="hm-title">Symptom Body Map</div>
-  <div class="hm-sub">{total} symptom(s) mapped{f' · {unknown} unclassified' if unknown else ''}</div>
-  <svg viewBox="0 0 200 420" width="180" height="380">
-    <!-- Head -->
-    <ellipse cx="100" cy="38" rx="26" ry="30" style="{_intensity('head')}" rx="4"/>
-    <!-- Neck -->
-    <rect x="90" y="66" width="20" height="14" style="{_intensity('head')}" rx="3"/>
-    <!-- Chest / torso upper -->
-    <rect x="60" y="80" width="80" height="75" style="{_intensity('chest')}" rx="8"/>
-    <!-- Abdomen / torso lower -->
-    <rect x="62" y="155" width="76" height="65" style="{_intensity('abdomen')}" rx="6"/>
-    <!-- Left arm -->
-    <rect x="22" y="85" width="34" height="100" style="{_intensity('arms')}" rx="10"/>
-    <!-- Right arm -->
-    <rect x="144" y="85" width="34" height="100" style="{_intensity('arms')}" rx="10"/>
-    <!-- Left hand -->
-    <ellipse cx="39" cy="200" rx="14" ry="16" style="{_intensity('arms')}"/>
-    <!-- Right hand -->
-    <ellipse cx="161" cy="200" rx="14" ry="16" style="{_intensity('arms')}"/>
-    <!-- Left leg -->
-    <rect x="64" y="222" width="32" height="130" style="{_intensity('legs')}" rx="10"/>
-    <!-- Right leg -->
-    <rect x="104" y="222" width="32" height="130" style="{_intensity('legs')}" rx="10"/>
-    <!-- Left foot -->
-    <ellipse cx="80" cy="365" rx="18" ry="12" style="{_intensity('legs')}"/>
-    <!-- Right foot -->
-    <ellipse cx="120" cy="365" rx="18" ry="12" style="{_intensity('legs')}"/>
-    <!-- Skin overlay (outline) -->
-    <rect x="18" y="28" width="164" height="355" rx="20"
-          style="fill:none;stroke:{('#dc2626' if region_counts.get('skin',0)/max_count>0.66
-                  else '#f59e0b' if region_counts.get('skin',0)/max_count>0.33
-                  else '#3b82f6') if region_counts.get('skin',0)>0 else '#e5e7eb'};
-                 stroke-width:{3 if region_counts.get('skin',0)>0 else 0};
-                 stroke-dasharray:6 4;opacity:{0.7 if region_counts.get('skin',0)>0 else 0}"/>
-    <!-- Region labels (only shown if count > 0) -->
-    {"<text x='100' y='42' text-anchor='middle' font-size='9' font-weight='700' fill='#fff'>" + _label('head') + "</text>" if region_counts.get('head',0) else ""}
-    {"<text x='100' y='122' text-anchor='middle' font-size='9' font-weight='700' fill='#fff'>" + _label('chest') + "</text>" if region_counts.get('chest',0) else ""}
-    {"<text x='100' y='192' text-anchor='middle' font-size='9' font-weight='700' fill='#fff'>" + _label('abdomen') + "</text>" if region_counts.get('abdomen',0) else ""}
-    {"<text x='39' y='140' text-anchor='middle' font-size='8' font-weight='700' fill='#fff'>" + _label('arms') + "</text>" if region_counts.get('arms',0) else ""}
-    {"<text x='80' y='300' text-anchor='middle' font-size='8' font-weight='700' fill='#fff'>" + _label('legs') + "</text>" if region_counts.get('legs',0) else ""}
-  </svg>
+<div class="bm-wrap">
+  <div class="bm-title">Symptom Body Map</div>
+  <div class="bm-sub">{total} symptom(s) mapped{f' &middot; {unknown} unclassified' if unknown else ''}</div>
+  <div class="body-ctr" id="body-main">
+    <img class="body-img" src="data:image/jpeg;base64,{img_b64}" alt="body outline"/>
+    {skin_overlay}
+    {circles_html}
+    <div class="zoom-hint"><svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+      stroke="#6b7280" stroke-width="2.5"><circle cx="10" cy="10" r="7"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+      Click to zoom</div>
+  </div>
   <div class="legend">
     <span><span class="ldot" style="background:#3b82f6"></span> Low</span>
     <span><span class="ldot" style="background:#f59e0b"></span> Med</span>
     <span><span class="ldot" style="background:#dc2626"></span> High</span>
-    {"<span>| Dashed outline = Skin (" + str(region_counts.get('skin',0)) + ")</span>" if region_counts.get('skin',0) else ""}
+    {skin_legend}
+  </div>
+  <div class="how-to">Circles show affected areas &mdash; larger &amp; warmer colors mean more reported symptoms.<br/>
+  Numbers indicate symptom count per region.</div>
+</div>
+<div id="zoom-overlay">
+  <div id="zoom-inner">
+    <button class="zoom-x" id="zoom-x-btn" title="Close">&times;</button>
+    <div id="zoom-clone-slot"></div>
+    <div class="legend" style="margin-top:12px">
+      <span><span class="ldot" style="background:#3b82f6"></span> Low</span>
+      <span><span class="ldot" style="background:#f59e0b"></span> Med</span>
+      <span><span class="ldot" style="background:#dc2626"></span> High</span>
+      {skin_legend}
+    </div>
+    <div class="how-to" style="margin-top:8px">Circles show affected areas &mdash; larger &amp; warmer colors mean more reported symptoms.<br/>
+    Numbers indicate symptom count per region.</div>
   </div>
 </div>
+<script>
+(function(){{
+  var main=document.getElementById('body-main');
+  var overlay=document.getElementById('zoom-overlay');
+  var inner=document.getElementById('zoom-inner');
+  var xBtn=document.getElementById('zoom-x-btn');
+  var origFrameStyle='';
+  function expandFrame(){{
+    try{{
+      var f=window.frameElement;
+      if(f){{
+        origFrameStyle=f.getAttribute('style')||'';
+        f.style.position='fixed';
+        f.style.inset='0';
+        f.style.width='100vw';
+        f.style.height='100vh';
+        f.style.zIndex='9999';
+        f.style.background='transparent';
+      }}
+    }}catch(e){{}}
+  }}
+  function restoreFrame(){{
+    try{{
+      var f=window.frameElement;
+      if(f) f.setAttribute('style',origFrameStyle);
+    }}catch(e){{}}
+  }}
+  var slot=document.getElementById('zoom-clone-slot');
+  function openLightbox(){{
+    expandFrame();
+    var clone=main.cloneNode(true);
+    clone.removeAttribute('id');
+    slot.innerHTML='';
+    slot.appendChild(clone);
+    overlay.style.display='flex';
+  }}
+  function closeLightbox(){{
+    overlay.style.display='none';
+    slot.innerHTML='';
+    restoreFrame();
+  }}
+  main.addEventListener('click',openLightbox);
+  overlay.addEventListener('click',function(e){{
+    if(e.target===overlay) closeLightbox();
+  }});
+  xBtn.addEventListener('click',function(e){{
+    e.stopPropagation();
+    closeLightbox();
+  }});
+  document.addEventListener('keydown',function(e){{
+    if(e.key==='Escape'&&overlay.style.display==='flex') closeLightbox();
+  }});
+}})();
+</script>
 </body></html>"""
 
 
@@ -1429,11 +1552,13 @@ def render_body_heatmap():
 
     st.markdown(
         "<div class='card'><div class='card-title' style='color:#7c3aed;'>"
-        "Adverse-Event Body Map</div>",
+        "Adverse-Event Body Map</div>"
+        "<p style='font-size:12px;color:#9ca3af;margin:-4px 0 6px;'>"
+        "Visual overlay of reported adverse events on anatomical regions</p>",
         unsafe_allow_html=True,
     )
     html = _build_body_heatmap_html(region_counts, symptoms)
-    components.html(html, height=440, scrolling=False)
+    components.html(html, height=530, scrolling=False)
 
     # Systemic callout
     sys_count = region_counts.get("systemic", 0)
