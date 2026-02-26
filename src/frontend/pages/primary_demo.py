@@ -1033,10 +1033,56 @@ def render_kg():
         raw_rx = r.get("kg_reactions", [])
         raw_ing = r.get("kg_ingredients", [])
 
+        # ── Ingredient-only match ──
+        ing_match = r.get("kg_ingredient_match")
+        if ing_match:
+            ing_name = ing_match["ingredient"].title()
+            drugs = ing_match["drugs"]
+            st.markdown(
+                f"<div style='margin-bottom:0.75rem;padding:0.6rem 1rem;"
+                f"background:#fefce8;border-left:4px solid #ca8a04;border-radius:6px;'>"
+                f"<span style='font-size:1.05rem;'><b>{ing_name}</b> is an "
+                f"<b>ingredient</b>, not a standalone drug in the Knowledge Graph.</span><br/>"
+                f"<span style='color:#6b7280;font-size:0.88rem;'>"
+                f"Found in {len(drugs)} drug(s):</span></div>",
+                unsafe_allow_html=True,
+            )
+            for d in drugs[:8]:
+                brand_preview = ", ".join(d.get("brand_names", [])[:3]) or "—"
+                strength = f" ({d['strength']})" if d.get("strength") else ""
+                st.markdown(
+                    f"&nbsp;&nbsp;&nbsp;&nbsp;**{d['generic_name'].title()}**{strength}"
+                    f" — *{brand_preview}*"
+                )
+            if len(drugs) > 8:
+                st.caption(f"  ...and {len(drugs) - 8} more")
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
+
         if not (raw_ix or raw_co or raw_rx or raw_ing):
             st.info("This drug is not in the Knowledge Graph seed list. "
                     "Try a more common drug, or rebuild with a larger seed.")
         else:
+            # ── Drug identity subheading ──
+            kg_id = r.get("kg_identity") or {}
+            queried_name = r.get("drug_name", "")
+            generic = kg_id.get("generic_name", "")
+            brands = kg_id.get("brand_names", [])
+            brand_str = ", ".join(brands[:5]) if brands else "—"
+            if generic:
+                resolved_line = f"<b>{generic.title()}</b>"
+                if queried_name.lower() != generic.lower():
+                    resolved_line = f"<b>{generic.title()}</b> (searched: <i>{queried_name}</i>)"
+                st.markdown(
+                    f"<div style='margin-bottom:0.75rem;padding:0.6rem 1rem;"
+                    f"background:#f5f3ff;border-left:4px solid #7c3aed;border-radius:6px;'>"
+                    f"<span style='font-size:1.05rem;'>{resolved_line}</span><br/>"
+                    f"<span style='color:#6b7280;font-size:0.88rem;'>"
+                    f"Brand names: {brand_str}"
+                    f"{'&hellip;' if len(brands) > 5 else ''}</span></div>",
+                    unsafe_allow_html=True,
+                )
+
             enriched = _enrich_kg_data(raw_ing, raw_ix, raw_co, raw_rx)
             ingredients = enriched["ingredients"]
             interactions = enriched["interactions"]

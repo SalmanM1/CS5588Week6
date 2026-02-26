@@ -7,15 +7,17 @@ Step 2 of the KG build pipeline.
 - Creates HAS_PRODUCT edges with product metadata.
 """
 
-import sqlite3
-import time
-from typing import Dict, List
+from __future__ import annotations
 
-from src.kg.schema import upsert_node, upsert_edge
+import time
+from typing import TYPE_CHECKING, Dict, List
+
+if TYPE_CHECKING:
+    from src.kg.backend import GraphBackend
 
 
 def build_ndc_edges(
-    conn: sqlite3.Connection,
+    backend: GraphBackend,
     drugs: List[Dict],
     sleep_s: float = 0.25,
 ) -> None:
@@ -60,8 +62,8 @@ def build_ndc_edges(
                 continue
 
             ing_id = ing_name.lower()
-            upsert_node(conn, ing_id, "Ingredient", {"name": ing_name})
-            upsert_edge(conn, node_id, ing_id, "HAS_ACTIVE_INGREDIENT", {
+            backend.upsert_node(ing_id, "Ingredient", {"name": ing_name})
+            backend.upsert_edge(node_id, ing_id, "HAS_ACTIVE_INGREDIENT", {
                 "source": "ndc",
                 "strength": ing.get("strength", ""),
             })
@@ -70,30 +72,27 @@ def build_ndc_edges(
         # ── Product metadata (stored as edge props) ────────────
         product_ndcs = ndc_meta.get("product_ndcs", [])
         if product_ndcs:
-            # Store a summary in one HAS_PRODUCT edge per drug
             product_props = {
                 "source": "ndc",
                 "dosage_forms": ndc_meta.get("dosage_forms", []),
                 "routes": ndc_meta.get("routes", []),
                 "manufacturer": ndc_meta.get("manufacturer"),
                 "marketing_category": ndc_meta.get("marketing_category"),
-                "product_ndcs": product_ndcs[:10],  # cap to avoid bloat
+                "product_ndcs": product_ndcs[:10],
             }
-            # Use a synthetic product node id
             prod_id = f"product:{node_id}"
-            upsert_node(conn, prod_id, "Product", {
+            backend.upsert_node(prod_id, "Product", {
                 "drug_id": node_id,
                 "generic_name": generic,
             })
-            upsert_edge(conn, node_id, prod_id, "HAS_PRODUCT", product_props)
+            backend.upsert_edge(node_id, prod_id, "HAS_PRODUCT", product_props)
             product_count += 1
 
-        # Progress
         if (i + 1) % 50 == 0:
             print(f"  [NDC] Processed {i + 1}/{len(drugs)} drugs")
-            conn.commit()
+            backend.commit()
 
         time.sleep(sleep_s)
 
-    conn.commit()
+    backend.commit()
     print(f"  [NDC] Done. {ingredient_count} ingredient edges, {product_count} product edges, {failed} failed.")

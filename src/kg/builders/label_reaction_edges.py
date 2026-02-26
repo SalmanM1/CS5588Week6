@@ -12,32 +12,14 @@ This enables disparity analysis:
   - Reactions with both = confirmed risks
 """
 
+from __future__ import annotations
+
 import re
-import sqlite3
 import time
-from typing import Dict, List, Set
+from typing import TYPE_CHECKING, Dict, List, Set
 
-from src.kg.schema import upsert_edge
-
-
-def _get_all_reaction_terms(conn: sqlite3.Connection) -> Dict[str, str]:
-    """
-    Build a dictionary of {lowercase_reaction_term: node_id}
-    from existing Reaction nodes in the KG.
-    """
-    rows = conn.execute(
-        "SELECT id, props FROM nodes WHERE type = 'Reaction'"
-    ).fetchall()
-
-    terms = {}
-    for row in rows:
-        node_id = row[0]
-        # Extract the MedDRA term from the node id (format: "reaction:term")
-        if node_id.startswith("reaction:"):
-            term = node_id[len("reaction:"):]
-            terms[term.lower()] = node_id
-
-    return terms
+if TYPE_CHECKING:
+    from src.kg.backend import GraphBackend
 
 
 def _extract_reactions_from_text(
@@ -54,13 +36,11 @@ def _extract_reactions_from_text(
     text_lower = text.lower()
     matched_ids = set()
 
-    # Sort by length descending so longer terms match first
     for term, node_id in sorted(
         known_reactions.items(), key=lambda x: len(x[0]), reverse=True
     ):
-        if len(term) < 4:  # Skip very short terms to avoid false positives
+        if len(term) < 4:
             continue
-        # Use word boundary matching
         pattern = r'\b' + re.escape(term) + r'\b'
         if re.search(pattern, text_lower):
             matched_ids.add(node_id)
@@ -69,7 +49,7 @@ def _extract_reactions_from_text(
 
 
 def build_label_reaction_edges(
-    conn: sqlite3.Connection,
+    backend: GraphBackend,
     drugs: List[Dict],
     sleep_s: float = 0.25,
 ) -> None:
@@ -80,8 +60,7 @@ def build_label_reaction_edges(
     """
     from src.ingestion.openfda_client import fetch_openfda_records
 
-    # Get all known reaction terms from the KG (built by FAERS step)
-    known_reactions = _get_all_reaction_terms(conn)
+    known_reactions = backend.get_reaction_term_map()
     if not known_reactions:
         print("  [LabelRx] WARNING: No Reaction nodes found. Run FAERS step first.")
         return
@@ -113,7 +92,6 @@ def build_label_reaction_edges(
             time.sleep(sleep_s)
             continue
 
-        # Extract all adverse reaction text from label records
         all_matched: Set[str] = set()
         for rec in records:
             for field in ("adverse_reactions", "warnings", "warnings_and_cautions",
@@ -125,9 +103,8 @@ def build_label_reaction_edges(
                     matched = _extract_reactions_from_text(text, known_reactions)
                     all_matched.update(matched)
 
-        # Create LABEL_WARNS_REACTION edges
         for reaction_id in all_matched:
-            upsert_edge(conn, node_id, reaction_id, "LABEL_WARNS_REACTION", {
+            backend.upsert_edge(node_id, reaction_id, "LABEL_WARNS_REACTION", {
                 "source": "label",
             })
             edge_count += 1
@@ -137,11 +114,11 @@ def build_label_reaction_edges(
 
         if (i + 1) % 50 == 0:
             print(f"  [LabelRx] Processed {i + 1}/{len(drugs)} drugs ({edge_count} edges)")
-            conn.commit()
+            backend.commit()
 
         time.sleep(sleep_s)
 
-    conn.commit()
+    backend.commit()
     print(
         f"  [LabelRx] Done. {edge_count} LABEL_WARNS_REACTION edges, "
         f"{drugs_with_matches}/{len(drugs)} drugs had matches, {failed} failed."
