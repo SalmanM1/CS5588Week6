@@ -82,6 +82,18 @@ def main():
         help="Skip Label reaction edge building (disparity analysis)",
     )
 
+    # ── Graph-enriched artifact generation ─────────────────────
+    parser.add_argument(
+        "--enrich-graph",
+        action="store_true",
+        help="After KG build, generate graph-enriched RAG artifacts for a drug",
+    )
+    parser.add_argument(
+        "--enrich-drug",
+        default=None,
+        help="Drug name/RxCUI to build enriched artifacts for (required with --enrich-graph)",
+    )
+
     # ── Backend selection ──────────────────────────────────────
     parser.add_argument(
         "--backend",
@@ -202,6 +214,46 @@ def main():
     print("[Final] Rebuilding alias lookup table...")
     alias_count = backend.rebuild_aliases()
     print(f"  → {alias_count} aliases indexed\n")
+
+    # ── Step 6: Graph-enriched artifact generation (optional) ──
+    if args.enrich_graph:
+        if not args.enrich_drug:
+            print("ERROR: --enrich-drug is required when --enrich-graph is set.")
+            backend.close()
+            sys.exit(1)
+
+        print(f"[Step 6] Building graph-enriched artifacts for '{args.enrich_drug}'...")
+
+        from src.kg.loader import KnowledgeGraph
+        from src.ingestion.openfda_client import build_artifacts
+        from src.ingestion.rxnorm import resolve_drug_name
+
+        kg_for_enrich = KnowledgeGraph(backend)
+
+        rxnorm = resolve_drug_name(args.enrich_drug)
+        generic = rxnorm.get("generic_name") or rxnorm.get("resolved_name") or args.enrich_drug
+        search_q = f'openfda.generic_name:"{generic}"'
+        out_dir = os.path.join("preprocessed", generic.lower().replace(" ", "_"))
+
+        print(f"  Drug resolved: {generic}")
+        print(f"  openFDA search: {search_q}")
+        print(f"  Output dir: {out_dir}")
+
+        arts = build_artifacts(
+            api_search=search_q,
+            output_dir=out_dir,
+            save=True,
+            save_vectorizer=True,
+            verbose=True,
+            kg=kg_for_enrich,
+        )
+
+        manifest = arts.get("manifest", {})
+        counts = manifest.get("counts", {})
+        print(
+            f"  → {counts.get('graph_enriched_chunks', 0)}/{counts.get('record_chunks', 0)} "
+            f"record chunks enriched\n"
+        )
 
     # ── Summary ────────────────────────────────────────────────
     elapsed = time.time() - t0

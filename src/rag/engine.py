@@ -374,6 +374,9 @@ def run_rag_query(
         }
 
     # 2 ── Fetch + chunk + index (in-memory, no disk save)
+    #      Load the KG so chunks are enriched with graph context before
+    #      embedding — improves retrieval for multi-hop pharma queries.
+    kg = load_kg()
     try:
         arts = build_artifacts(
             api_search=search_q,
@@ -388,6 +391,7 @@ def run_rag_query(
             api_limit=api_limit,
             api_max_records=max_records,
             verbose=False,
+            kg=kg,
         )
     except RuntimeError as exc:
         lat = round((time.time() - t0) * 1000, 1)
@@ -427,7 +431,10 @@ def run_rag_query(
     e_type = emb.get("type")
     e_model = emb.get("model")
     vec = arts.get("vectorizer")
-    n_recs = (arts.get("manifest", {}).get("counts") or {}).get("records", 0)
+    counts = (arts.get("manifest", {}).get("counts") or {})
+    n_recs = counts.get("records", 0)
+    n_enriched = counts.get("graph_enriched_chunks", 0)
+    n_chunks = counts.get("record_chunks", 0)
 
     # 3 ── Retrieve
     pool = max(20, top_k * 3)
@@ -556,5 +563,7 @@ def run_rag_query(
         "prompt": prompt,
         "llm_used": llm_used,
         "method": method,
+        "graph_enriched_chunks": n_enriched,
+        "total_chunks": n_chunks,
         **kg_data,
     }

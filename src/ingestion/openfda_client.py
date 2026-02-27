@@ -60,6 +60,8 @@ class TextChunk:
     doc_id: str
     field: str
     text: str
+    enriched_text: Optional[str] = None
+    graph_enriched: bool = False
 
 
 @dataclass
@@ -68,6 +70,8 @@ class SubChunk:
     doc_id: str
     field: str
     text: str
+    enriched_text: Optional[str] = None
+    graph_enriched: bool = False
 
 
 def clean_text(text: str) -> str:
@@ -300,7 +304,18 @@ def build_artifacts(
     api_sort: Optional[str] = None,
     api_pause_s: float = 0.0,
     api_timeout_s: int = 30,
+    kg: Optional[Any] = None,
 ) -> Dict[str, Any]:
+    """Build retrieval artifacts (chunks, BM25, FAISS) from openFDA labels.
+
+    Parameters
+    ----------
+    kg : optional
+        A :class:`~src.kg.loader.KnowledgeGraph` instance.  When provided,
+        each chunk is enriched with structured graph context before
+        embedding.  The original ``text`` is preserved; the enriched
+        version is stored in ``enriched_text``.
+    """
     if not api_search:
         raise ValueError("api_search is required for openFDA ingestion.")
 
@@ -333,8 +348,37 @@ def build_artifacts(
         for j, t in enumerate(fixed_size_chunk(rc.text, words_per_chunk, overlap)):
             sub_chunks.append(SubChunk(f"{rc.chunk_id}::c{j+1}", rc.doc_id, rc.field, t))
 
-    texts_A = [c.text for c in record_chunks]
-    texts_B = [c.text for c in sub_chunks]
+    # ── Graph enrichment (optional) ───────────────────────────
+    enriched_count = 0
+    if kg is not None:
+        import warnings as _w
+        from src.rag.graph_enrichment import enrich_chunk, clear_context_cache
+
+        clear_context_cache()
+        for chunk in record_chunks:
+            enriched = enrich_chunk(chunk.chunk_id, chunk.text, kg)
+            if enriched != chunk.text:
+                chunk.enriched_text = enriched
+                chunk.graph_enriched = True
+                enriched_count += 1
+            else:
+                _w.warn(f"No graph data for chunk '{chunk.chunk_id}'")
+
+        for chunk in sub_chunks:
+            enriched = enrich_chunk(chunk.chunk_id, chunk.text, kg)
+            if enriched != chunk.text:
+                chunk.enriched_text = enriched
+                chunk.graph_enriched = True
+
+        clear_context_cache()
+        if verbose:
+            print(f"Graph-enriched: {enriched_count}/{len(record_chunks)} record chunks")
+
+    def _embed_text(c: Any) -> str:
+        return c.enriched_text if c.enriched_text else c.text
+
+    texts_A = [_embed_text(c) for c in record_chunks]
+    texts_B = [_embed_text(c) for c in sub_chunks]
 
     tokens_A = [tokenize(t) for t in texts_A] if texts_A else []
     tokens_B = [tokenize(t) for t in texts_B] if texts_B else []
@@ -409,6 +453,7 @@ def build_artifacts(
             "records": records_count,
             "record_chunks": len(record_chunks),
             "sub_chunks": len(sub_chunks),
+            "graph_enriched_chunks": enriched_count,
         },
         "embedder": {
             "type": embedder_type,

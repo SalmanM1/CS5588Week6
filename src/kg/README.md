@@ -20,6 +20,12 @@ src/kg/
     ├── label_edges.py           # Step 3: INTERACTS_WITH edges from label text
     ├── faers_edges.py           # Step 4: CO_REPORTED_WITH + DRUG_CAUSES_REACTION edges
     └── label_reaction_edges.py  # Step 5: LABEL_WARNS_REACTION edges (disparity analysis)
+
+src/rag/
+└── graph_enrichment.py  # Prepends KG context to chunks before embedding (ingestion-time)
+
+tests/
+└── test_enrichment.py   # Benchmark: plain vs graph-enriched retrieval
 ```
 
 ## Backend Abstraction
@@ -209,13 +215,39 @@ This means:
 
 ## RAG Pipeline Integration
 
-The KG participates in the RAG pipeline at three points:
+The KG participates in the RAG pipeline at four points:
 
 ### 1. Pre-retrieval: scope validation
 
 As described above, `_drug_is_known()` runs before the openFDA API call. This is the cheapest possible check — a local hash lookup followed by at most 2 HTTP calls — and prevents the system from wasting 2-3 seconds fetching irrelevant FDA label text.
 
-### 2. Post-retrieval: structured enrichment
+### 2. Ingestion-time: graph-enriched chunk embeddings
+
+Before chunks are embedded, the `src/rag/graph_enrichment.py` module prepends structured KG context to each chunk's text so that the resulting vectors capture multi-hop relationships (interactions, reactions, ingredients, FAERS disparity signals) rather than just label prose. This happens during the offline ingestion path — the query-time pipeline is unaffected.
+
+When `build_artifacts(kg=...)` receives a `KnowledgeGraph` instance, it calls `enrich_chunk()` for every `TextChunk` and `SubChunk`. For each chunk, the drug ID is extracted from the chunk ID (the segment before `::`) and used to query the KG. The enriched text is stored in the chunk's `enriched_text` field and a `graph_enriched` flag is set to `True`. The original `text` field is never mutated.
+
+A `[GRAPH CONTEXT]` block is prepended in this format:
+
+```
+[GRAPH CONTEXT]
+Drug: metformin | RxCUI: 6809 | Also known as: GLUCOPHAGE, FORTAMET
+Ingredients: METFORMIN HYDROCHLORIDE
+Interactions: insulin, glyburide, furosemide, nifedipine, cationic drugs
+Adverse reactions (FAERS): Diarrhoea, Nausea, Drug ineffective, Fatigue, Vomiting
+Co-reported drugs: INSULIN, LISINOPRIL, ATORVASTATIN, AMLODIPINE, METOPROLOL
+Emerging risks (FAERS not on label): [EMERGING RISK] Drug ineffective, [EMERGING RISK] Fatigue
+
+<original chunk text>
+```
+
+**Per-drug caching** — Multiple chunks sharing the same `doc_id` (i.e. the same drug) reuse a single set of KG queries via a module-level cache (`_context_cache`). The cache is cleared between ingestion batches with `clear_context_cache()`.
+
+**Graceful degradation** — If the drug is not found in the KG, the chunk text is returned unchanged. If a KG query raises an exception, a warning is emitted and the original text is preserved.
+
+The manifest returned by `build_artifacts()` includes a `graph_enriched_chunks` count, and `run_rag_query()` surfaces this alongside `total_chunks` in its response for observability.
+
+### 3. Post-retrieval: structured enrichment
 
 After the RAG retrieval + answer generation phase, `run_rag_query()` calls `load_kg()` and fetches structured data for the resolved drug:
 
@@ -227,7 +259,7 @@ After the RAG retrieval + answer generation phase, `run_rag_query()` calls `load
 
 This data is returned alongside the RAG answer and rendered in the frontend's Knowledge Graph panel, network visualization, risk calculator, and body heatmap.
 
-### 3. Drug profile builder
+### 4. Drug profile builder
 
 The `build_unified_profile()` function in `src/rag/drug_profile.py` goes further: it also adds KG-sourced text sections (interactions, co-reported drugs, reactions, ingredients) into the `text_sections` list, making them available for FAISS + BM25 retrieval alongside the FDA label text.
 
@@ -330,6 +362,25 @@ The `KnowledgeGraph` class in `loader.py` provides these methods (identical API 
 | `get_summary(name)` | Combined dict of all the above |
 
 The `name` parameter accepts generic names (`ibuprofen`), brand names (`Advil`), or RxCUI codes (`206878`). All lookups go through the alias table first.
+
+## Graph Enrichment Benchmark
+
+The `tests/test_enrichment.py` script provides a side-by-side comparison of retrieval quality with and without graph enrichment. It builds two sets of artifacts from the same openFDA data — one plain, one graph-enriched — and runs five multi-hop pharma queries against both, reporting which chunks are surfaced and how many "new discoveries" the enriched pipeline produces.
+
+```bash
+# Default (metformin)
+python -m tests.test_enrichment
+
+# Custom drug
+python -m tests.test_enrichment --drug warfarin
+
+# Explicit openFDA search + custom KG path
+python -m tests.test_enrichment \
+  --search 'openfda.generic_name:"aspirin"' \
+  --kg-path data/kg/trupharma_kg.db
+```
+
+Requires a built KG database (run `python scripts/build_kg.py` first). Skips gracefully if the KG is unavailable.
 
 ## Example Queries
 
