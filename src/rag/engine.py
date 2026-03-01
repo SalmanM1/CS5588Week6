@@ -84,6 +84,42 @@ LOG_COLS = [
 #  RETRIEVAL HELPERS
 # ══════════════════════════════════════════════════════════════
 
+def _drug_is_known(name: str) -> bool:
+    """
+    Fast check: is *name* a recognised drug (via local KG then RxNorm)?
+
+    Used to gate out-of-scope queries (e.g. economic projections, general
+    science) that would otherwise retrieve incidental keyword matches from
+    FDA label text.
+
+    Check order:
+      1. KG alias table  — O(1), local SQLite / Neo4j
+      2. RxNorm exact-match + concept lookup  — 1-2 HTTP calls
+      3. If RxNorm is unreachable, return True (benefit of the doubt)
+    """
+    try:
+        kg = load_kg()
+        if kg:
+            if kg.get_drug_identity(name):
+                return True
+            if kg.get_ingredient_drugs(name):
+                return True
+    except Exception:
+        pass
+
+    try:
+        from src.ingestion.rxnorm import get_rxcui_by_name, get_drug_info
+
+        if get_rxcui_by_name(name):
+            return True
+        if get_drug_info(name).get("rxcuis"):
+            return True
+    except Exception:
+        return True
+
+    return False
+
+
 def _embed_query(query, embedder_type, embedder_model, vectorizer):
     """Embed a query using the same method that was used during indexing."""
     if embedder_type == "sentence_transformers":
@@ -302,7 +338,45 @@ def run_rag_query(
     # 1 ── Build openFDA search query from user text
     search_q = build_openfda_query(query, fields=FIELD_ALLOWLIST)
 
+    # 1b ── Scope gate: reject queries that don't reference any drug
+    drug_name = _extract_drug_name(query)
+    if not _drug_is_known(drug_name):
+        lat = round((time.time() - t0) * 1000, 1)
+        oos_answer = "Not enough evidence in the retrieved context."
+        log_row({
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "query": query[:200],
+            "latency_ms": lat,
+            "evidence_ids": "",
+            "confidence": 0.0,
+            "num_evidence": 0,
+            "num_records": 0,
+            "retrieval_method": method,
+            "llm_used": False,
+            "answer_preview": oos_answer[:150],
+        })
+        return {
+            "answer": oos_answer,
+            "evidence": [],
+            "latency_ms": lat,
+            "confidence": 0.0,
+            "num_records": 0,
+            "search_query": search_q,
+            "drug_name": drug_name,
+            "prompt": "",
+            "llm_used": False,
+            "method": method,
+            "kg_interactions": [],
+            "kg_co_reported": [],
+            "kg_reactions": [],
+            "kg_ingredients": [],
+            "kg_available": False,
+        }
+
     # 2 ── Fetch + chunk + index (in-memory, no disk save)
+    #      Load the KG so chunks are enriched with graph context before
+    #      embedding — improves retrieval for multi-hop pharma queries.
+    kg = load_kg()
     try:
         arts = build_artifacts(
             api_search=search_q,
@@ -317,6 +391,7 @@ def run_rag_query(
             api_limit=api_limit,
             api_max_records=max_records,
             verbose=False,
+            kg=kg,
         )
     except RuntimeError as exc:
         lat = round((time.time() - t0) * 1000, 1)
@@ -356,7 +431,10 @@ def run_rag_query(
     e_type = emb.get("type")
     e_model = emb.get("model")
     vec = arts.get("vectorizer")
-    n_recs = (arts.get("manifest", {}).get("counts") or {}).get("records", 0)
+    counts = (arts.get("manifest", {}).get("counts") or {})
+    n_recs = counts.get("records", 0)
+    n_enriched = counts.get("graph_enriched_chunks", 0)
+    n_chunks = counts.get("record_chunks", 0)
 
     # 3 ── Retrieve
     pool = max(20, top_k * 3)
@@ -439,10 +517,21 @@ def run_rag_query(
                 except Exception:
                     lookup = drug_name
 
-            kg_data["kg_interactions"] = kg.get_interactions(lookup)
-            kg_data["kg_co_reported"] = kg.get_co_reported(lookup)
-            kg_data["kg_reactions"] = kg.get_drug_reactions(lookup)
-            kg_data["kg_ingredients"] = kg.get_ingredients(lookup)
+            identity = kg.get_drug_identity(lookup)
+            if identity:
+                kg_data["kg_interactions"] = kg.get_interactions(lookup)
+                kg_data["kg_co_reported"] = kg.get_co_reported(lookup)
+                kg_data["kg_reactions"] = kg.get_drug_reactions(lookup)
+                kg_data["kg_ingredients"] = kg.get_ingredients(lookup)
+                kg_data["kg_identity"] = identity
+            else:
+                ingredient_drugs = kg.get_ingredient_drugs(drug_name)
+                if ingredient_drugs:
+                    kg_data["kg_ingredient_match"] = {
+                        "ingredient": drug_name,
+                        "drugs": ingredient_drugs,
+                    }
+
             kg_data["kg_available"] = True
             kg_data["_drug_name"] = drug_name
     except Exception:
@@ -474,5 +563,7 @@ def run_rag_query(
         "prompt": prompt,
         "llm_used": llm_used,
         "method": method,
+        "graph_enriched_chunks": n_enriched,
+        "total_chunks": n_chunks,
         **kg_data,
     }

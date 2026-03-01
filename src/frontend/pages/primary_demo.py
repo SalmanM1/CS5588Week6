@@ -69,15 +69,21 @@ st.markdown("""<style>
     background-color: #E8F5E9; border-left: 6px solid #2E7D32;
 }
 .card {
-    background: #FFFFFF; border: 1px solid #E5E7EB;
+    background: #FFFFFF; border: 1px solid #D1D5DB;
     border-radius: 14px; padding: 14px 16px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.06); margin-bottom: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 14px;
 }
 .card-title { font-weight: 800; font-size: 16px; margin-bottom: 8px; }
 .card-title.response { color: #1f7a8c; }
 .card-title.evidence { color: #d35400; }
 .card-title.metrics  { color: #2e7d32; }
 .card-title.logs     { color: #6b7280; }
+.card.card-response  { border-left: 4px solid #1f7a8c; }
+.card.card-evidence  { border-left: 4px solid #d35400; }
+.card.card-metrics   { border-left: 4px solid #2e7d32; }
+.card.card-logs      { border-left: 4px solid #6b7280; }
+.card.card-kg        { border-left: 4px solid #7c3aed; }
+.card.card-bodymap   { border-left: 4px solid #7c3aed; }
 .kg-pill {
     display: inline-block; padding: 5px 14px; margin: 3px 4px;
     border-radius: 20px; font-size: 13px; font-weight: 700;
@@ -176,11 +182,28 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Example Queries")
 EXAMPLES = [
     "-- Select an example --",
+    # Drug interactions
     "What are the drug interactions for ibuprofen?",
+    "Can I take aspirin with warfarin?",
+    "What drugs interact with metformin?",
+    # Dosage and warnings
     "What is the recommended dosage for acetaminophen and are there any warnings?",
-    "I am taking aspirin daily. What should I know about overdosage and when to stop use?",
     "What safety warnings exist for caffeine-containing products?",
+    "Are there any boxed warnings for lisinopril?",
+    # Adverse reactions
+    "What are the most commonly reported side effects of omeprazole?",
+    "What adverse reactions are associated with atorvastatin?",
+    "How serious are adverse events reported for metoprolol?",
+    # Active ingredients
     "What are the active ingredients in Tylenol and what are the drug interactions?",
+    "What drugs contain acetaminophen as an active ingredient?",
+    # Overdosage and patient guidance
+    "I am taking aspirin daily. What should I know about overdosage and when to stop use?",
+    "What happens if I take too much gabapentin?",
+    # Multi-drug and comparative
+    "Compare the adverse reaction profiles of ibuprofen and naproxen.",
+    "What drugs are commonly co-reported with prednisone in adverse event reports?",
+    # Out-of-scope (expected to fail gracefully)
     "What is the projected cost of antimicrobial resistance to GDP in 2050?",
 ]
 example = st.sidebar.selectbox("Pick a sample question:", EXAMPLES, index=0)
@@ -305,7 +328,7 @@ def _normalize_citations(answer: str, evidence: list) -> str:
 
 def render_response():
     st.markdown(
-        "<div class='card'><div class='card-title response'>Response Panel</div>",
+        "<div class='card card-response'><div class='card-title response'>Response Panel</div>",
         unsafe_allow_html=True,
     )
     r = st.session_state.result
@@ -323,7 +346,7 @@ def render_response():
 
 def render_evidence():
     st.markdown(
-        "<div class='card'><div class='card-title evidence'>Evidence / Artifacts</div>",
+        "<div class='card card-evidence'><div class='card-title evidence'>Evidence / Artifacts</div>",
         unsafe_allow_html=True,
     )
     r = st.session_state.result
@@ -1017,7 +1040,7 @@ def _render_risk_calculator(enriched, drug_name):
 
 def render_kg():
     st.markdown(
-        "<div class='card'><div class='card-title' style='color:#7c3aed;'>"
+        "<div class='card card-kg'><div class='card-title' style='color:#7c3aed;'>"
         "Knowledge Graph — Decision Support</div>",
         unsafe_allow_html=True,
     )
@@ -1033,10 +1056,56 @@ def render_kg():
         raw_rx = r.get("kg_reactions", [])
         raw_ing = r.get("kg_ingredients", [])
 
+        # ── Ingredient-only match ──
+        ing_match = r.get("kg_ingredient_match")
+        if ing_match:
+            ing_name = ing_match["ingredient"].title()
+            drugs = ing_match["drugs"]
+            st.markdown(
+                f"<div style='margin-bottom:0.75rem;padding:0.6rem 1rem;"
+                f"background:#fefce8;border-left:4px solid #ca8a04;border-radius:6px;'>"
+                f"<span style='font-size:1.05rem;'><b>{ing_name}</b> is an "
+                f"<b>ingredient</b>, not a standalone drug in the Knowledge Graph.</span><br/>"
+                f"<span style='color:#6b7280;font-size:0.88rem;'>"
+                f"Found in {len(drugs)} drug(s):</span></div>",
+                unsafe_allow_html=True,
+            )
+            for d in drugs[:8]:
+                brand_preview = ", ".join(d.get("brand_names", [])[:3]) or "—"
+                strength = f" ({d['strength']})" if d.get("strength") else ""
+                st.markdown(
+                    f"&nbsp;&nbsp;&nbsp;&nbsp;**{d['generic_name'].title()}**{strength}"
+                    f" — *{brand_preview}*"
+                )
+            if len(drugs) > 8:
+                st.caption(f"  ...and {len(drugs) - 8} more")
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
+
         if not (raw_ix or raw_co or raw_rx or raw_ing):
             st.info("This drug is not in the Knowledge Graph seed list. "
                     "Try a more common drug, or rebuild with a larger seed.")
         else:
+            # ── Drug identity subheading ──
+            kg_id = r.get("kg_identity") or {}
+            queried_name = r.get("drug_name", "")
+            generic = kg_id.get("generic_name", "")
+            brands = kg_id.get("brand_names", [])
+            brand_str = ", ".join(brands[:5]) if brands else "—"
+            if generic:
+                resolved_line = f"<b>{generic.title()}</b>"
+                if queried_name.lower() != generic.lower():
+                    resolved_line = f"<b>{generic.title()}</b> (searched: <i>{queried_name}</i>)"
+                st.markdown(
+                    f"<div style='margin-bottom:0.75rem;padding:0.6rem 1rem;"
+                    f"background:#f5f3ff;border-left:4px solid #7c3aed;border-radius:6px;'>"
+                    f"<span style='font-size:1.05rem;'>{resolved_line}</span><br/>"
+                    f"<span style='color:#6b7280;font-size:0.88rem;'>"
+                    f"Brand names: {brand_str}"
+                    f"{'&hellip;' if len(brands) > 5 else ''}</span></div>",
+                    unsafe_allow_html=True,
+                )
+
             enriched = _enrich_kg_data(raw_ing, raw_ix, raw_co, raw_rx)
             ingredients = enriched["ingredients"]
             interactions = enriched["interactions"]
@@ -1083,12 +1152,15 @@ def render_kg():
                     "<div class='value' style='font-size:15px;color:#7c3aed'>Analyze My Risk</div>"
                     "<div class='sub'>Based on your patient context</div></div>",
                     unsafe_allow_html=True)
+                def _toggle_risk():
+                    st.session_state["show_risk_calc"] = not st.session_state.get("show_risk_calc", False)
+
                 _risk_open = st.session_state.get("show_risk_calc", False)
                 _risk_label = "Close Assessment" if _risk_open else "Open Assessment"
                 _risk_type = "secondary" if _risk_open else "primary"
-                if st.button(_risk_label, key="kg_risk_toggle",
-                             use_container_width=True, type=_risk_type):
-                    st.session_state["show_risk_calc"] = not _risk_open
+                st.button(_risk_label, key="kg_risk_toggle",
+                          use_container_width=True, type=_risk_type,
+                          on_click=_toggle_risk)
 
             # ── Personalized risk calculator (shown on toggle) ──
             if st.session_state.get("show_risk_calc", False):
@@ -1211,7 +1283,7 @@ def render_kg():
 
 def render_metrics():
     st.markdown(
-        "<div class='card'><div class='card-title metrics'>Metrics & Monitoring</div>",
+        "<div class='card card-metrics'><div class='card-title metrics'>Metrics & Monitoring</div>",
         unsafe_allow_html=True,
     )
     r = st.session_state.result
@@ -1221,6 +1293,26 @@ def render_metrics():
         m2.metric("Evidence Ct.", len(r["evidence"]))
         m3.metric("Confidence", f"{r['confidence']:.0%}")
         m4.metric("Records Fetched", r["num_records"])
+
+        enriched_n = r.get("graph_enriched_chunks", 0)
+        total_n = r.get("total_chunks", 0)
+        if enriched_n > 0:
+            st.markdown(
+                f"<div style='padding:8px 12px;margin:8px 0;background:#f0fdf4;"
+                f"border-left:4px solid #16a34a;border-radius:6px;font-size:13px'>"
+                f"<b>Graph Enrichment Active</b> — "
+                f"{enriched_n}/{total_n} chunks enriched with KG context "
+                f"(interactions, reactions, ingredients, FAERS signals)</div>",
+                unsafe_allow_html=True,
+            )
+        elif r.get("kg_available"):
+            st.markdown(
+                f"<div style='padding:8px 12px;margin:8px 0;background:#fefce8;"
+                f"border-left:4px solid #ca8a04;border-radius:6px;font-size:13px'>"
+                f"<b>Graph Enrichment</b> — KG available but no chunks matched "
+                f"graph data for this drug</div>",
+                unsafe_allow_html=True,
+            )
 
         st.markdown(f"- **Retrieval method:** {r['method']}")
         st.markdown(f"- **LLM used:** {'Gemini 2.0 Flash' if r['llm_used'] else 'Extractive fallback'}")
@@ -1233,7 +1325,7 @@ def render_metrics():
 
 def render_logs():
     st.markdown(
-        "<div class='card'><div class='card-title logs'>Logs</div>",
+        "<div class='card card-logs'><div class='card-title logs'>Logs</div>",
         unsafe_allow_html=True,
     )
 
@@ -1551,7 +1643,7 @@ def render_body_heatmap():
         return
 
     st.markdown(
-        "<div class='card'><div class='card-title' style='color:#7c3aed;'>"
+        "<div class='card card-bodymap'><div class='card-title' style='color:#7c3aed;'>"
         "Adverse-Event Body Map</div>"
         "<p style='font-size:12px;color:#9ca3af;margin:-4px 0 6px;'>"
         "Visual overlay of reported adverse events on anatomical regions</p>",

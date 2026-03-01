@@ -4,8 +4,10 @@ rxnorm_nodes.py · Build Drug nodes from openFDA + RxNorm
 Step 1 of the KG build pipeline.
 - Discovers top drugs via the openFDA label count API.
 - Resolves each via RxNorm (reuses src.ingestion.rxnorm).
-- Inserts Drug nodes into the KG SQLite database.
+- Inserts Drug nodes into the KG via the active backend.
 """
+
+from __future__ import annotations
 
 import json
 import ssl
@@ -13,13 +15,13 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-import sqlite3
-from typing import Dict, List
+from typing import TYPE_CHECKING, Dict, List
 
-from src.kg.schema import upsert_node, rebuild_aliases
+if TYPE_CHECKING:
+    from src.kg.backend import GraphBackend
 
 # ──────────────────────────────────────────────────────────────
-#  SSL / HTTP helpers (reuse pattern from other ingestion modules)
+#  SSL / HTTP helpers
 # ──────────────────────────────────────────────────────────────
 
 try:
@@ -49,26 +51,17 @@ def _api_get(url: str) -> dict:
 # ──────────────────────────────────────────────────────────────
 
 def _fetch_top_drug_names(max_drugs: int = 200) -> List[str]:
-    """
-    Use the openFDA label count endpoint to get the most common
-    generic drug names across all drug labels.
-    
-    Returns a list of lowercase generic drug names.
-    """
-    # openFDA count endpoint returns up to 1000 results
     limit = min(max_drugs, 1000)
-    url = (
-        f"{_LABEL_BASE}?count=openfda.generic_name.exact&limit={limit}"
-    )
+    url = f"{_LABEL_BASE}?count=openfda.generic_name.exact&limit={limit}"
     data = _api_get(url)
     results = data.get("results", [])
-    
+
     names = []
     for r in results:
         term = r.get("term", "").strip()
         if term and len(term) > 1:
             names.append(term.lower())
-    
+
     print(f"  [RxNorm] Discovered {len(names)} drug names from openFDA label counts")
     return names[:max_drugs]
 
@@ -78,17 +71,16 @@ def _fetch_top_drug_names(max_drugs: int = 200) -> List[str]:
 # ──────────────────────────────────────────────────────────────
 
 def build_drug_nodes(
-    conn: sqlite3.Connection,
+    backend: GraphBackend,
     max_drugs: int = 200,
     sleep_s: float = 0.15,
 ) -> List[Dict]:
     """
     Build Drug nodes from openFDA discovery + RxNorm resolution.
-    
+
     Returns a list of drug dicts (for use by downstream builders):
         [{"node_id": ..., "generic_name": ..., "rxcui": ..., "brand_names": [...]}, ...]
     """
-    # Import here to avoid circular import at module load
     from src.ingestion.rxnorm import resolve_drug_name
 
     seed_names = _fetch_top_drug_names(max_drugs)
@@ -113,15 +105,12 @@ def build_drug_nodes(
         brands = rxnorm.get("brand_names", [])
         confidence = rxnorm.get("confidence", "none")
 
-        # Skip unresolved drugs (no RxCUI and no confidence)
         if confidence == "none" and not rxcui:
             failed += 1
             continue
 
-        # Node ID: prefer rxcui, fallback to lowercase generic name
         node_id = rxcui if rxcui else generic.lower()
 
-        # Deduplicate
         if node_id in seen_ids:
             continue
         seen_ids.add(node_id)
@@ -132,7 +121,7 @@ def build_drug_nodes(
             "rxcui": rxcui,
             "confidence": confidence,
         }
-        upsert_node(conn, node_id, "Drug", props)
+        backend.upsert_node(node_id, "Drug", props)
 
         drugs.append({
             "node_id": node_id,
@@ -141,14 +130,13 @@ def build_drug_nodes(
             "brand_names": brands,
         })
 
-        # Progress every 50 drugs
         if (i + 1) % 50 == 0:
             print(f"  [RxNorm] Resolved {i + 1}/{len(seed_names)} drugs ({len(drugs)} unique nodes)")
-            conn.commit()
+            backend.commit()
 
         time.sleep(sleep_s)
 
-    conn.commit()
-    alias_count = rebuild_aliases(conn)
+    backend.commit()
+    alias_count = backend.rebuild_aliases()
     print(f"  [RxNorm] Done. {len(drugs)} Drug nodes created, {failed} failed/skipped, {alias_count} aliases indexed.")
     return drugs

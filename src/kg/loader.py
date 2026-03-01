@@ -1,18 +1,20 @@
 """
 loader.py · TruPharma Knowledge Graph — Read-Only Query API
 =============================================================
-Loads the built KG SQLite database and provides structured query methods.
+Loads the KG (SQLite or Neo4j) and provides structured query methods.
 Used by the RAG pipeline / drug profile builder at runtime.
 
-Graceful degradation: if the KG file doesn't exist, load_kg() returns None
-and the app continues without KG data.
+Graceful degradation: if the backend is unavailable, load_kg() returns
+None and the app continues without KG data.
 """
 
-import json
+from __future__ import annotations
+
 import os
-import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from src.kg.backend import GraphBackend, create_backend
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_KG_PATH = str(_PROJECT_ROOT / "data" / "kg" / "trupharma_kg.db")
@@ -20,158 +22,60 @@ _DEFAULT_KG_PATH = str(_PROJECT_ROOT / "data" / "kg" / "trupharma_kg.db")
 
 class KnowledgeGraph:
     """
-    Read-only wrapper around the KG SQLite database.
+    Read-only wrapper around a :class:`GraphBackend`.
     Provides structured queries for drug identity, interactions,
     co-reported drugs, reactions, and ingredients.
     """
 
-    def __init__(self, db_path: str):
-        # Open in read-only mode via URI
-        uri = f"file:{db_path}?mode=ro"
-        self._conn = sqlite3.connect(uri, uri=True)
-        self._conn.row_factory = sqlite3.Row
+    def __init__(self, backend: GraphBackend):
+        self._b = backend
 
-    def close(self):
-        if self._conn:
-            self._conn.close()
-            self._conn = None
+    def close(self) -> None:
+        self._b.close()
 
     # ──────────────────────────────────────────────────────────
     #  Internal helpers
     # ──────────────────────────────────────────────────────────
 
     def _find_drug_id(self, name_or_rxcui: str) -> Optional[str]:
-        """
-        Resolve a name or RxCUI to the Drug node id.
-        Uses the drug_aliases table for O(1) lookup, with fallback
-        to linear scan for databases built before the alias table existed.
-        """
         q = name_or_rxcui.strip()
         if not q:
             return None
 
-        q_lower = q.lower()
+        # Fast path: alias table
+        result = self._b.resolve_alias(q)
+        if result:
+            return result
 
-        # Fast path: alias table lookup
-        try:
-            row = self._conn.execute(
-                "SELECT node_id FROM drug_aliases WHERE alias = ?",
-                (q_lower,)
-            ).fetchone()
-            if row:
-                return row["node_id"]
-        except Exception:
-            pass  # Table may not exist in older DBs
+        # Direct id lookup
+        node = self._b.get_node(q.lower())
+        if node and node.get("type") == "Drug":
+            return node["id"]
+        node = self._b.get_node(q)
+        if node and node.get("type") == "Drug":
+            return node["id"]
 
-        # Fallback: direct id match
-        row = self._conn.execute(
-            "SELECT id FROM nodes WHERE type='Drug' AND id = ?",
-            (q_lower,)
-        ).fetchone()
-        if row:
-            return row["id"]
-
-        # Also try the raw value (RxCUI might be numeric string)
-        row = self._conn.execute(
-            "SELECT id FROM nodes WHERE type='Drug' AND id = ?",
-            (q,)
-        ).fetchone()
-        if row:
-            return row["id"]
-
-        # Slowest fallback: scan props
-        rows = self._conn.execute(
-            "SELECT id, props FROM nodes WHERE type='Drug'"
-        ).fetchall()
-        for r in rows:
-            try:
-                props = json.loads(r["props"]) if r["props"] else {}
-            except (json.JSONDecodeError, TypeError):
-                continue
-            if props.get("rxcui") == q:
-                return r["id"]
-            gn = (props.get("generic_name") or "").lower()
-            if gn == q_lower:
-                return r["id"]
-            brands = [b.lower() for b in props.get("brand_names", []) if b]
-            if q_lower in brands:
-                return r["id"]
-
-        return None
-
-    def _parse_props(self, props_str: Optional[str]) -> dict:
-        if not props_str:
-            return {}
-        try:
-            return json.loads(props_str)
-        except (json.JSONDecodeError, TypeError):
-            return {}
-
-    def _get_edges(
-        self, node_id: str, edge_type: str, direction: str = "outgoing"
-    ) -> List[dict]:
-        """Get edges of a specific type, outgoing or incoming."""
-        if direction == "outgoing":
-            rows = self._conn.execute(
-                "SELECT src, dst, props FROM edges WHERE src = ? AND type = ?",
-                (node_id, edge_type),
-            ).fetchall()
-        else:
-            rows = self._conn.execute(
-                "SELECT src, dst, props FROM edges WHERE dst = ? AND type = ?",
-                (node_id, edge_type),
-            ).fetchall()
-
-        results = []
-        for r in rows:
-            props = self._parse_props(r["props"])
-            results.append({
-                "src": r["src"],
-                "dst": r["dst"],
-                **props,
-            })
-        return results
-
-    def _get_node(self, node_id: str) -> Optional[dict]:
-        row = self._conn.execute(
-            "SELECT id, type, props FROM nodes WHERE id = ?",
-            (node_id,)
-        ).fetchone()
-        if not row:
-            return None
-        return {
-            "id": row["id"],
-            "type": row["type"],
-            **self._parse_props(row["props"]),
-        }
+        # Name / brand / rxcui search
+        return self._b.find_drug_node_id(q)
 
     # ──────────────────────────────────────────────────────────
     #  Public query methods
     # ──────────────────────────────────────────────────────────
 
-    def get_drug_identity(self, name_or_rxcui: str) -> Optional[dict]:
-        """
-        Look up a drug by name or RxCUI.
-        Returns: {id, type, generic_name, brand_names, rxcui, ...} or None.
-        """
+    def get_drug_identity(self, name_or_rxcui: str) -> Optional[Dict[str, Any]]:
         drug_id = self._find_drug_id(name_or_rxcui)
         if not drug_id:
             return None
-        return self._get_node(drug_id)
+        return self._b.get_node(drug_id)
 
-    def get_interactions(self, name_or_rxcui: str) -> List[dict]:
-        """
-        Get drug–drug interactions (INTERACTS_WITH edges).
-        Returns list of dicts with the interacting drug info.
-        """
+    def get_interactions(self, name_or_rxcui: str) -> List[Dict[str, Any]]:
         drug_id = self._find_drug_id(name_or_rxcui)
         if not drug_id:
             return []
-
-        edges = self._get_edges(drug_id, "INTERACTS_WITH", "outgoing")
+        edges = self._b.get_edges(drug_id, "INTERACTS_WITH", "outgoing")
         results = []
         for e in edges:
-            target = self._get_node(e["dst"])
+            target = self._b.get_node(e["dst"])
             results.append({
                 "drug_id": e["dst"],
                 "drug_name": (target or {}).get("generic_name", e["dst"]),
@@ -180,64 +84,47 @@ class KnowledgeGraph:
             })
         return results
 
-    def get_co_reported(self, name_or_rxcui: str) -> List[dict]:
-        """
-        Get drugs co-reported in FAERS adverse event reports.
-        Returns list of dicts with co-reported drug info + report count.
-        """
+    def get_co_reported(self, name_or_rxcui: str) -> List[Dict[str, Any]]:
         drug_id = self._find_drug_id(name_or_rxcui)
         if not drug_id:
             return []
-
-        edges = self._get_edges(drug_id, "CO_REPORTED_WITH", "outgoing")
+        edges = self._b.get_edges(drug_id, "CO_REPORTED_WITH", "outgoing")
         results = []
         for e in edges:
-            target = self._get_node(e["dst"])
+            target = self._b.get_node(e["dst"])
             results.append({
                 "drug_id": e["dst"],
                 "drug_name": (target or {}).get("generic_name", e["dst"]),
                 "report_count": e.get("report_count", 0),
                 "source": e.get("source", "faers"),
             })
-        # Sort by report count descending
         results.sort(key=lambda x: x.get("report_count", 0), reverse=True)
         return results
 
-    def get_drug_reactions(self, name_or_rxcui: str) -> List[dict]:
-        """
-        Get adverse reactions linked to this drug from FAERS.
-        Returns list of dicts with reaction name + report count.
-        """
+    def get_drug_reactions(self, name_or_rxcui: str) -> List[Dict[str, Any]]:
         drug_id = self._find_drug_id(name_or_rxcui)
         if not drug_id:
             return []
-
-        edges = self._get_edges(drug_id, "DRUG_CAUSES_REACTION", "outgoing")
+        edges = self._b.get_edges(drug_id, "DRUG_CAUSES_REACTION", "outgoing")
         results = []
         for e in edges:
-            target = self._get_node(e["dst"])
+            target = self._b.get_node(e["dst"])
             results.append({
                 "reaction": (target or {}).get("reactionmeddrapt", e["dst"]),
                 "report_count": e.get("report_count", 0),
                 "source": e.get("source", "faers"),
             })
-        # Sort by report count descending
         results.sort(key=lambda x: x.get("report_count", 0), reverse=True)
         return results
 
-    def get_ingredients(self, name_or_rxcui: str) -> List[dict]:
-        """
-        Get active ingredients for a drug from NDC.
-        Returns list of dicts with ingredient name + strength.
-        """
+    def get_ingredients(self, name_or_rxcui: str) -> List[Dict[str, Any]]:
         drug_id = self._find_drug_id(name_or_rxcui)
         if not drug_id:
             return []
-
-        edges = self._get_edges(drug_id, "HAS_ACTIVE_INGREDIENT", "outgoing")
+        edges = self._b.get_edges(drug_id, "HAS_ACTIVE_INGREDIENT", "outgoing")
         results = []
         for e in edges:
-            target = self._get_node(e["dst"])
+            target = self._b.get_node(e["dst"])
             results.append({
                 "ingredient": (target or {}).get("name", e["dst"]),
                 "strength": e.get("strength", ""),
@@ -245,33 +132,43 @@ class KnowledgeGraph:
             })
         return results
 
-    def get_label_reactions(self, name_or_rxcui: str) -> List[dict]:
-        """
-        Get adverse reactions that the official label warns about.
-        Returns list of dicts with reaction name.
-        """
+    def get_ingredient_drugs(self, ingredient_name: str) -> List[Dict[str, Any]]:
+        """If *ingredient_name* matches an Ingredient node, return the
+        Drug nodes that contain it (via incoming HAS_ACTIVE_INGREDIENT)."""
+        node = self._b.get_node(ingredient_name.strip().lower())
+        if not node or node.get("type") != "Ingredient":
+            return []
+        edges = self._b.get_edges(node["id"], "HAS_ACTIVE_INGREDIENT", "incoming")
+        seen, results = set(), []
+        for e in edges:
+            if e["src"] in seen:
+                continue
+            seen.add(e["src"])
+            drug = self._b.get_node(e["src"])
+            if drug:
+                results.append({
+                    "drug_id": drug["id"],
+                    "generic_name": drug.get("generic_name", drug["id"]),
+                    "brand_names": drug.get("brand_names", []),
+                    "strength": e.get("strength", ""),
+                })
+        return results
+
+    def get_label_reactions(self, name_or_rxcui: str) -> List[Dict[str, Any]]:
         drug_id = self._find_drug_id(name_or_rxcui)
         if not drug_id:
             return []
-
-        edges = self._get_edges(drug_id, "LABEL_WARNS_REACTION", "outgoing")
+        edges = self._b.get_edges(drug_id, "LABEL_WARNS_REACTION", "outgoing")
         results = []
         for e in edges:
-            target = self._get_node(e["dst"])
+            target = self._b.get_node(e["dst"])
             results.append({
                 "reaction": (target or {}).get("reactionmeddrapt", e["dst"]),
                 "source": "label",
             })
         return results
 
-    def get_disparity_analysis(self, name_or_rxcui: str) -> Optional[dict]:
-        """
-        Compare FAERS-reported reactions vs label-warned reactions.
-        Returns:
-          - confirmed_risks: in FAERS AND on label
-          - emerging_signals: in FAERS but NOT on label (high risk)
-          - unconfirmed_warnings: on label but rarely/not in FAERS
-        """
+    def get_disparity_analysis(self, name_or_rxcui: str) -> Optional[Dict[str, Any]]:
         drug_id = self._find_drug_id(name_or_rxcui)
         if not drug_id:
             return None
@@ -289,33 +186,35 @@ class KnowledgeGraph:
         emerging = faers_terms - label_terms
         unconfirmed = label_terms - faers_terms
 
-        # Enrich with report counts from FAERS data
         faers_lookup = {r["reaction"].lower(): r for r in faers_reactions}
 
         return {
             "confirmed_risks": [
-                {"reaction": t, "report_count": faers_lookup.get(t, {}).get("report_count", 0)}
+                {
+                    "reaction": t,
+                    "report_count": faers_lookup.get(t, {}).get("report_count", 0),
+                }
                 for t in sorted(confirmed)
             ],
             "emerging_signals": [
-                {"reaction": t, "report_count": faers_lookup.get(t, {}).get("report_count", 0)}
-                for t in sorted(emerging, key=lambda x: faers_lookup.get(x, {}).get("report_count", 0), reverse=True)
+                {
+                    "reaction": t,
+                    "report_count": faers_lookup.get(t, {}).get("report_count", 0),
+                }
+                for t in sorted(
+                    emerging,
+                    key=lambda x: faers_lookup.get(x, {}).get("report_count", 0),
+                    reverse=True,
+                )
             ],
-            "unconfirmed_warnings": [
-                {"reaction": t} for t in sorted(unconfirmed)
-            ],
+            "unconfirmed_warnings": [{"reaction": t} for t in sorted(unconfirmed)],
             "disparity_score": len(emerging) / max(len(faers_terms), 1),
         }
 
-    def get_summary(self, name_or_rxcui: str) -> Optional[dict]:
-        """
-        Get a comprehensive summary of all KG data for a drug.
-        Returns a combined dict or None if drug not found.
-        """
+    def get_summary(self, name_or_rxcui: str) -> Optional[Dict[str, Any]]:
         identity = self.get_drug_identity(name_or_rxcui)
         if not identity:
             return None
-
         return {
             "identity": identity,
             "interactions": self.get_interactions(name_or_rxcui),
@@ -337,8 +236,12 @@ _KG_LOADED: bool = False
 
 def load_kg(path: str = _DEFAULT_KG_PATH) -> Optional[KnowledgeGraph]:
     """
-    Load the Knowledge Graph from a SQLite file.
-    Returns None if the file doesn't exist (graceful degradation).
+    Load the Knowledge Graph from the configured backend.
+
+    - If ``NEO4J_URI`` env-var is set → Neo4j backend.
+    - Otherwise → SQLite file at *path* (must exist).
+
+    Returns ``None`` when the backend is unavailable (graceful degradation).
     The result is cached: subsequent calls return the same instance.
     """
     global _KG_INSTANCE, _KG_LOADED
@@ -348,12 +251,15 @@ def load_kg(path: str = _DEFAULT_KG_PATH) -> Optional[KnowledgeGraph]:
 
     _KG_LOADED = True
 
-    if not os.path.exists(path):
-        _KG_INSTANCE = None
-        return None
-
     try:
-        _KG_INSTANCE = KnowledgeGraph(path)
+        if os.environ.get("NEO4J_URI"):
+            backend = create_backend("neo4j")
+        elif os.path.exists(path):
+            backend = create_backend("sqlite", sqlite_path=path, readonly=True)
+        else:
+            _KG_INSTANCE = None
+            return None
+        _KG_INSTANCE = KnowledgeGraph(backend)
     except Exception:
         _KG_INSTANCE = None
 

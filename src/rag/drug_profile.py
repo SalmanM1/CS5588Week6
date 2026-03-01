@@ -53,19 +53,48 @@ _STOP_WORDS = frozenset(
     "what are the is of for a an in on to and or how does do can "
     "side effects warnings interactions dosage dose drug about with "
     "tell me information info safety adverse reactions risk risks "
-    "taking taken take should i my does it its this that".split()
+    "taking taken take should i my does it its this that "
+    "recommended any there which when where why who whom "
+    "have has had been being much many more most some "
+    "use uses used using common between would could "
+    "please help list describe explain compare "
+    "exist exists containing products product medications medication "
+    "associated related cause causes known possible potential".split()
 )
 
 
 def _extract_drug_name(query: str) -> str:
     """
-    Heuristic extraction of a drug name from a natural-language query.
-    Returns the longest non-stopword token sequence as a candidate drug name.
+    Extract a drug name from a natural-language query.
+
+    Strategy:
+      1. Tokenize (splitting hyphenated compounds) and drop stopwords.
+      2. Check each candidate against the KG — tries Drug nodes first,
+         then Ingredient nodes (which link back to their parent Drug).
+      3. Fall back to the first non-stopword token (original heuristic).
     """
-    tokens = re.findall(r"[a-zA-Z0-9\-]+", query)
+    raw_tokens = re.findall(r"[a-zA-Z0-9\-]+", query)
+    tokens = []
+    for t in raw_tokens:
+        if "-" in t:
+            tokens.extend(t.split("-"))
+        tokens.append(t)
     candidates = [t for t in tokens if t.lower() not in _STOP_WORDS and len(t) > 2]
     if not candidates:
         return query.strip()
+
+    try:
+        kg = load_kg()
+        if kg:
+            for c in candidates:
+                if kg.get_drug_identity(c):
+                    return c
+            for c in candidates:
+                if kg.get_ingredient_drugs(c):
+                    return c
+    except Exception:
+        pass
+
     return candidates[0]
 
 

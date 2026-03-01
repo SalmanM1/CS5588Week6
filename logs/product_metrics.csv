@@ -116,3 +116,145 @@ CONTRAIND"
 2026-02-22T00:42:13Z,What are the drug interactions for ibuprofen?,2493.7,[29c0c23b-f87d-4a94-a411-4091f399ecd1::indications_and_usage]; [29c0c23b-f87d-4a94-a411-4091f399ecd1::contraindications]; [79c3da5e-f442-46a6-8580-ffc85fad1a09::drug_interactions]; [8c45ef1f-f708-485b-bc20-60aa87ce6289::spl_medguide]; [528f5a4e-274b-5b3c-e054-00144ff8d46c::drug_interactions],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [79c3da5e-f442-46a6-8580-ffc85fad1a09::drug_interactions]
 
 CONTRAIND"
+2026-02-22T00:45:51Z,What are the drug interactions for ibuprofen?,2212.3,[29c0c23b-f87d-4a94-a411-4091f399ecd1::indications_and_usage]; [29c0c23b-f87d-4a94-a411-4091f399ecd1::contraindications]; [79c3da5e-f442-46a6-8580-ffc85fad1a09::drug_interactions]; [8c45ef1f-f708-485b-bc20-60aa87ce6289::spl_medguide]; [528f5a4e-274b-5b3c-e054-00144ff8d46c::drug_interactions],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [79c3da5e-f442-46a6-8580-ffc85fad1a09::drug_interactions]
+
+CONTRAIND"
+2026-02-22T17:12:24Z,What is the recommended dosage for acetaminophen and are there any warnings?,4034.9,[79c3da5e-f442-46a6-8580-ffc85fad1a09::dosage_and_administration]; [8c45ef1f-f708-485b-bc20-60aa87ce6289::overdosage]; [528f5a4e-274b-5b3c-e054-00144ff8d46c::dosage_and_administration]; [8c45ef1f-f708-485b-bc20-60aa87ce6289::spl_medguide]; [79c3da5e-f442-46a6-8580-ffc85fad1a09::use_in_specific_populations],0.94,5,20,hybrid,False,2 DOSAGE AND ADMINISTRATION The recommended dosage of MEKINIST in adult patients is 2 mg orally once daily. [79c3da5e-f442-46a6-8580-ffc85fad1a09::dos
+2026-02-26T01:27:40Z,What is the recommended dosage for acetaminophen and are there any warnings?,2461.4,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"2 DOSAGE AND ADMINISTRATION The recommended dosage of MEKINIST in adult patients is 2 mg orally once daily. [Evidence 1]
+
+It is not known what dose of"
+2026-02-26T01:28:22Z,What are the drug interactions for ibuprofen?,1990.6,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T01:36:04Z,What are the drug interactions for ibuprofen?,2081.6,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T01:39:42Z,What are the active ingredients in Tylenol and what are the drug interactions?,2200.5,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"Drug Facts Active ingredients Povidone-iodine, 5% (0.5% available iodine) [Evidence 2]
+
+BRONZE ACTIVE INGREDIENTS: TITANIUM DIOXIDE 2 %, ETHYLHEXYL ME"
+2026-02-26T01:39:57Z,What is the recommended dosage for acetaminophen and are there any warnings?,2191.5,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"2 DOSAGE AND ADMINISTRATION The recommended dosage of MEKINIST in adult patients is 2 mg orally once daily. [Evidence 1]
+
+It is not known what dose of"
+2026-02-26T01:40:09Z,I am taking aspirin daily. What should I know about overdosage and when to stop use?,2568.5,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"What is the most important information I should know about gabapentin? [Evidence 1]
+
+10 OVERDOSAGE Symptoms following acute NSAID overdosages have bee"
+2026-02-26T01:53:04Z,What are the drug interactions for ibuprofen?,3864.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T01:54:22Z,What are the drug interactions for ibuprofen?,3135.8,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T02:07:05Z,What is the recommended dosage for acetaminophen and are there any warnings?,5467.6,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"2 DOSAGE AND ADMINISTRATION The recommended dosage of MEKINIST in adult patients is 2 mg orally once daily. [Evidence 1]
+
+It is not known what dose of"
+2026-02-26T02:07:16Z,What are the drug interactions for ibuprofen?,3957.4,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T02:08:17Z,What are the drug interactions for ibuprofen?,2605.4,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T02:11:13Z,I am taking aspirin daily. What should I know about overdosage and when to stop use?,2188.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"What is the most important information I should know about gabapentin? [Evidence 1]
+
+10 OVERDOSAGE Symptoms following acute NSAID overdosages have bee"
+2026-02-26T02:11:26Z,What are the drug interactions for ibuprofen?,2900.5,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T02:15:04Z,What are the drug interactions for ibuprofen?,3035.2,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T02:17:20Z,What are the drug interactions for ibuprofen?,2768.5,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T02:18:12Z,I am taking aspirin daily. What should I know about overdosage and when to stop use?,2637.4,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"What is the most important information I should know about gabapentin? [Evidence 1]
+
+10 OVERDOSAGE Symptoms following acute NSAID overdosages have bee"
+2026-02-26T02:23:25Z,What are the drug interactions for ibuprofen?,3113.2,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T02:26:42Z,What are the drug interactions for ibuprofen?,2292.6,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T02:26:55Z,What are the precautions for orphenadrine citrate injection?,3570.4,[Evidence 1]; [Evidence 2]; [Evidence 3],0.74,3,20,hybrid,False,Clarithromycin in combination with ranitidine bismuth citrate therapy is not recommended in patients with creatinine clearance less than 25 mL/min. [E
+2026-02-26T13:58:29Z,What is the recommended dosage for acetaminophen and are there any warnings?,2693.1,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"2 DOSAGE AND ADMINISTRATION The recommended dosage of MEKINIST in adult patients is 2 mg orally once daily. [Evidence 1]
+
+It is not known what dose of"
+2026-02-26T13:58:38Z,What are the drug interactions for ibuprofen?,2431.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T13:59:11Z,What safety warnings exist for caffeine-containing products?,1949.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.98,5,20,hybrid,False,( 8.3 ) Renal Impairment : Naproxen-containing products are not recommended for use in patients with moderate to severe and severe renal impairment (c
+2026-02-26T13:59:20Z,What safety warnings exist for caffeine-containing products?,2054.8,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.98,5,20,hybrid,False,( 8.3 ) Renal Impairment : Naproxen-containing products are not recommended for use in patients with moderate to severe and severe renal impairment (c
+2026-02-26T14:08:52Z,What is the recommended dosage for acetaminophen and are there any warnings?,2410.2,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"2 DOSAGE AND ADMINISTRATION The recommended dosage of MEKINIST in adult patients is 2 mg orally once daily. [Evidence 1]
+
+It is not known what dose of"
+2026-02-26T14:09:32Z,What is the recommended dosage for acetaminophen and are there any warnings?,1729.4,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"2 DOSAGE AND ADMINISTRATION The recommended dosage of MEKINIST in adult patients is 2 mg orally once daily. [Evidence 1]
+
+It is not known what dose of"
+2026-02-26T14:09:43Z,What safety warnings exist for caffeine-containing products?,2085.6,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.98,5,20,hybrid,False,( 8.3 ) Renal Impairment : Naproxen-containing products are not recommended for use in patients with moderate to severe and severe renal impairment (c
+2026-02-26T14:09:50Z,I am taking aspirin daily. What should I know about overdosage and when to stop use?,1845.3,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"What is the most important information I should know about gabapentin? [Evidence 1]
+
+10 OVERDOSAGE Symptoms following acute NSAID overdosages have bee"
+2026-02-26T14:10:00Z,What are the active ingredients in Tylenol and what are the drug interactions?,1841.9,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"Drug Facts Active ingredients Povidone-iodine, 5% (0.5% available iodine) [Evidence 2]
+
+BRONZE ACTIVE INGREDIENTS: TITANIUM DIOXIDE 2 %, ETHYLHEXYL ME"
+2026-02-26T14:11:32Z,What safety warnings exist for caffeine-containing products?,2389.3,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.98,5,20,hybrid,False,( 8.3 ) Renal Impairment : Naproxen-containing products are not recommended for use in patients with moderate to severe and severe renal impairment (c
+2026-02-26T14:12:49Z,What are the interactions of lisinopril with other drugs?,2603.4,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,( 7.2 ) 7.1 Use with Other Drugs for Smoking Cessation Safety and efficacy of varenicline in combination with other smoking cessation therapies have n
+2026-02-26T14:16:13Z,What safety warnings exist for caffeine-containing products?,2304.5,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.98,5,20,hybrid,False,( 8.3 ) Renal Impairment : Naproxen-containing products are not recommended for use in patients with moderate to severe and severe renal impairment (c
+2026-02-26T14:16:51Z,What safety warnings exist for caffeine-containing products?,2707.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.98,5,20,hybrid,False,( 8.3 ) Renal Impairment : Naproxen-containing products are not recommended for use in patients with moderate to severe and severe renal impairment (c
+2026-02-26T14:21:44Z,What safety warnings exist for caffeine-containing products?,2383.5,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.98,5,20,hybrid,False,( 8.3 ) Renal Impairment : Naproxen-containing products are not recommended for use in patients with moderate to severe and severe renal impairment (c
+2026-02-26T14:22:10Z,What are the drug interactions for ibuprofen?,1944.0,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T14:22:17Z,What are the drug interactions for ibuprofen?,1910.0,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T14:22:21Z,What is the recommended dosage for acetaminophen and are there any warnings?,2329.9,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"2 DOSAGE AND ADMINISTRATION The recommended dosage of MEKINIST in adult patients is 2 mg orally once daily. [Evidence 1]
+
+It is not known what dose of"
+2026-02-26T14:22:27Z,I am taking aspirin daily. What should I know about overdosage and when to stop use?,2011.4,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"What is the most important information I should know about gabapentin? [Evidence 1]
+
+10 OVERDOSAGE Symptoms following acute NSAID overdosages have bee"
+2026-02-26T14:22:39Z,What safety warnings exist for caffeine-containing products?,1904.5,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.98,5,20,hybrid,False,( 8.3 ) Renal Impairment : Naproxen-containing products are not recommended for use in patients with moderate to severe and severe renal impairment (c
+2026-02-26T14:23:31Z,What are the active ingredients in Tylenol and what are the drug interactions?,2011.0,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"Drug Facts Active ingredients Povidone-iodine, 5% (0.5% available iodine) [Evidence 2]
+
+BRONZE ACTIVE INGREDIENTS: TITANIUM DIOXIDE 2 %, ETHYLHEXYL ME"
+2026-02-26T14:23:45Z,What is the projected cost of antimicrobial resistance to GDP in 2050?,1787.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"In the setting of BRAF-mutant colorectal cancer, induction of EGFR-mediated MAPK pathway re-activation has been identified as a mechanism of intrinsic"
+2026-02-26T14:26:22Z,What safety warnings exist for caffeine-containing products?,2319.1,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.98,5,20,hybrid,False,( 8.3 ) Renal Impairment : Naproxen-containing products are not recommended for use in patients with moderate to severe and severe renal impairment (c
+2026-02-26T14:27:02Z,What is the projected cost of antimicrobial resistance to GDP in 2050?,1768.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"In the setting of BRAF-mutant colorectal cancer, induction of EGFR-mediated MAPK pathway re-activation has been identified as a mechanism of intrinsic"
+2026-02-26T14:31:31Z,What is the projected cost of antimicrobial resistance to GDP in 2050?,2968.3,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"In the setting of BRAF-mutant colorectal cancer, induction of EGFR-mediated MAPK pathway re-activation has been identified as a mechanism of intrinsic"
+2026-02-26T14:36:51Z,What is the projected cost of antimicrobial resistance to GDP in 2050?,487.9,,0.0,0,0,hybrid,False,Not enough evidence in the retrieved context.
+2026-02-26T14:37:41Z,What are the drug interactions for ibuprofen?,2238.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T14:37:43Z,What is the recommended dosage for acetaminophen and are there any warnings?,2123.5,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"2 DOSAGE AND ADMINISTRATION The recommended dosage of MEKINIST in adult patients is 2 mg orally once daily. [Evidence 1]
+
+It is not known what dose of"
+2026-02-26T14:37:45Z,I am taking aspirin daily. What should I know about overdosage?,2145.0,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"What is the most important information I should know about gabapentin? [Evidence 1]
+
+Medication Guide for Nonsteroidal Anti-inflammatory Drugs (NSAIDs"
+2026-02-26T14:38:28Z,What are the side effects of sorafenib?,2125.0,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"11 DESCRIPTION Naproxen Tablets, USP and Naproxen Sodium Tablets, USP are nonsteroidal anti-inflammatory drugs available as follows: Naproxen Tablets,"
+2026-02-26T14:38:29Z,Who won the 2024 US presidential election?,456.5,,0.0,0,0,hybrid,False,Not enough evidence in the retrieved context.
+2026-02-26T22:29:16Z,What drugs interact with metformin?,12831.1,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"The safety and efficacy of glimepiride in pediatric patients was evaluated in a single-blind, 24-week trial that randomized 272 patients (8 to 17 year"
+2026-02-26T22:33:28Z,What drugs interact with metformin?,9481.9,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"The safety and efficacy of glimepiride in pediatric patients was evaluated in a single-blind, 24-week trial that randomized 272 patients (8 to 17 year"
+2026-02-26T22:39:16Z,What safety warnings exist for caffeine-containing products?,8912.8,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.98,5,20,hybrid,False,( 8.3 ) Renal Impairment : Naproxen-containing products are not recommended for use in patients with moderate to severe and severe renal impairment (c
+2026-02-26T22:39:29Z,Are there any boxed warnings for lisinopril?,6892.5,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],1.0,5,20,hybrid,False,Elderly patients and patients with a prior history of peptic ulcer disease and/or GI bleeding are at greater risk for serious GI events [ see Warnings
+2026-02-26T22:47:07Z,What are the drug interactions for ibuprofen?,6546.1,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T22:48:38Z,What are the drug interactions for ibuprofen?,7292.4,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-26T22:48:56Z,What is the recommended dosage for acetaminophen and are there any warnings?,5922.6,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.94,5,20,hybrid,False,"2 DOSAGE AND ADMINISTRATION The recommended dosage of MEKINIST in adult patients is 2 mg orally once daily. [Evidence 1]
+
+It is not known what dose of"
+2026-02-26T22:50:05Z,What drugs interact with metformin?,12836.1,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"The safety and efficacy of glimepiride in pediatric patients was evaluated in a single-blind, 24-week trial that randomized 272 patients (8 to 17 year"
+2026-02-26T22:52:08Z,What drugs interact with metformin?,8179.5,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"The safety and efficacy of glimepiride in pediatric patients was evaluated in a single-blind, 24-week trial that randomized 272 patients (8 to 17 year"
+2026-02-26T22:53:43Z,What adverse reactions are associated with atorvastatin?,8867.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],1.0,5,20,hybrid,False,"12 )] There are additional adverse reactions associated with dabrafenib. [Evidence 2]
+
+6 ADVERSE REACTIONS The following serious adverse reactions are"
+2026-02-27T01:56:44Z,What are the drug interactions for ibuprofen?,2208.1,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.9,5,20,hybrid,False,"7 DRUG INTERACTIONS MEKINIST is indicated for use in combination with dabrafenib. [Evidence 3]
+
+CONTRAINDICATIONS Gabapentin tablets USP are contraind"
+2026-02-27T01:57:05Z,Can I take aspirin with warfarin?,2805.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],1.0,5,20,hybrid,False,"Intervention: Monitor patients with concomitant use of naproxen tablets or naproxen sodium tablets with anticoagulants (e.g., warfarin), antiplatelet "
+2026-02-27T01:57:18Z,What safety warnings exist for caffeine-containing products?,1941.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],0.98,5,20,hybrid,False,( 8.3 ) Renal Impairment : Naproxen-containing products are not recommended for use in patients with moderate to severe and severe renal impairment (c
+2026-02-27T01:58:39Z,Are there any boxed warnings for lisinopril?,2503.2,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],1.0,5,20,hybrid,False,Elderly patients and patients with a prior history of peptic ulcer disease and/or GI bleeding are at greater risk for serious GI events [ see Warnings
+2026-02-27T01:58:52Z,Can I take aspirin with warfarin?,1943.7,[Evidence 1]; [Evidence 2]; [Evidence 3]; [Evidence 4]; [Evidence 5],1.0,5,20,hybrid,False,"Intervention: Monitor patients with concomitant use of naproxen tablets or naproxen sodium tablets with anticoagulants (e.g., warfarin), antiplatelet "

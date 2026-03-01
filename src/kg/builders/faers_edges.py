@@ -7,16 +7,18 @@ Step 4 of the KG build pipeline.
 - Creates Reaction nodes + DRUG_CAUSES_REACTION edges.
 """
 
+from __future__ import annotations
+
 import json
 import ssl
-import sqlite3
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
-from src.kg.schema import upsert_node, upsert_edge, resolve_alias
+if TYPE_CHECKING:
+    from src.kg.backend import GraphBackend
 
 
 # ──────────────────────────────────────────────────────────────
@@ -50,7 +52,6 @@ def _api_get(url: str) -> dict:
 # ──────────────────────────────────────────────────────────────
 
 def _build_search(generic_name: str, rxcui: Optional[str] = None) -> str:
-    """Build FAERS search clause."""
     name = generic_name.strip().lower()
     clauses = [f'patient.drug.openfda.generic_name:"{name}"']
     if rxcui:
@@ -59,10 +60,6 @@ def _build_search(generic_name: str, rxcui: Optional[str] = None) -> str:
 
 
 def _fetch_co_reported_drugs(search: str, limit: int = 20) -> List[dict]:
-    """
-    Get drugs most frequently co-reported with the target drug in FAERS.
-    Uses count on patient.drug.medicinalproduct.exact.
-    """
     url = (
         f"{_FAERS_BASE}?search={search}"
         f"&count=patient.drug.medicinalproduct.exact&limit={limit}"
@@ -75,10 +72,6 @@ def _fetch_co_reported_drugs(search: str, limit: int = 20) -> List[dict]:
 
 
 def _fetch_top_reactions(search: str, limit: int = 25) -> List[dict]:
-    """
-    Get top adverse reactions reported for the target drug.
-    Uses count on patient.reaction.reactionmeddrapt.exact.
-    """
     url = (
         f"{_FAERS_BASE}?search={search}"
         f"&count=patient.reaction.reactionmeddrapt.exact&limit={limit}"
@@ -91,50 +84,11 @@ def _fetch_top_reactions(search: str, limit: int = 25) -> List[dict]:
 
 
 # ──────────────────────────────────────────────────────────────
-#  Resolve co-reported drug name to node ID
-# ──────────────────────────────────────────────────────────────
-
-def _find_drug_node(conn: sqlite3.Connection, name: str) -> Optional[str]:
-    """
-    Try to match a co-reported drug name to an existing Drug node.
-    """
-    name_lower = name.strip().lower()
-    if not name_lower:
-        return None
-
-    # Direct id match
-    row = conn.execute(
-        "SELECT id FROM nodes WHERE type='Drug' AND id = ?",
-        (name_lower,)
-    ).fetchone()
-    if row:
-        return row[0]
-
-    # Search by generic_name or brand_names in props
-    rows = conn.execute(
-        "SELECT id, props FROM nodes WHERE type='Drug'"
-    ).fetchall()
-    for r in rows:
-        try:
-            props = json.loads(r[1]) if r[1] else {}
-        except (json.JSONDecodeError, TypeError):
-            continue
-        gn = (props.get("generic_name") or "").lower()
-        if gn == name_lower:
-            return r[0]
-        brands = [b.lower() for b in props.get("brand_names", []) if b]
-        if name_lower in brands:
-            return r[0]
-
-    return None
-
-
-# ──────────────────────────────────────────────────────────────
 #  Main builder
 # ──────────────────────────────────────────────────────────────
 
 def build_faers_edges(
-    conn: sqlite3.Connection,
+    backend: GraphBackend,
     drugs: List[Dict],
     sleep_s: float = 0.3,
     max_co_reported: int = 50,
@@ -170,25 +124,23 @@ def build_faers_edges(
             if not term:
                 continue
 
-            # Skip if it's the same drug
             if term.lower() == generic.lower():
                 continue
 
-            target_id = _find_drug_node(conn, term)
+            target_id = backend.find_drug_node_id(term)
 
-            # If not found, create a stub Drug node
             if not target_id:
                 stub_id = term.strip().lower()
                 if stub_id == node_id or stub_id == generic.lower():
                     continue
-                upsert_node(conn, stub_id, "Drug", {
+                backend.upsert_node(stub_id, "Drug", {
                     "generic_name": term.strip(),
                     "stub": True,
                 })
                 target_id = stub_id
 
             if target_id and target_id != node_id:
-                upsert_edge(conn, node_id, target_id, "CO_REPORTED_WITH", {
+                backend.upsert_edge(node_id, target_id, "CO_REPORTED_WITH", {
                     "source": "faers",
                     "report_count": count,
                 })
@@ -211,17 +163,13 @@ def build_faers_edges(
 
             reaction_id = f"reaction:{term.lower()}"
 
-            # Check if this Reaction node is new
-            existing = conn.execute(
-                "SELECT id FROM nodes WHERE id = ?", (reaction_id,)
-            ).fetchone()
-            if not existing:
-                upsert_node(conn, reaction_id, "Reaction", {
+            if not backend.node_exists(reaction_id):
+                backend.upsert_node(reaction_id, "Reaction", {
                     "reactionmeddrapt": term,
                 })
                 reaction_node_count += 1
 
-            upsert_edge(conn, node_id, reaction_id, "DRUG_CAUSES_REACTION", {
+            backend.upsert_edge(node_id, reaction_id, "DRUG_CAUSES_REACTION", {
                 "source": "faers",
                 "report_count": count,
             })
@@ -234,9 +182,9 @@ def build_faers_edges(
                 f"  [FAERS] Processed {i + 1}/{len(drugs)} drugs "
                 f"({co_reported_count} co-reported, {reaction_edge_count} reaction edges)"
             )
-            conn.commit()
+            backend.commit()
 
-    conn.commit()
+    backend.commit()
     print(
         f"  [FAERS] Done. {co_reported_count} co-reported edges, "
         f"{reaction_node_count} Reaction nodes, {reaction_edge_count} reaction edges, "
