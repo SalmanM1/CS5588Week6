@@ -152,6 +152,8 @@ if "result" not in st.session_state:
     st.session_state.result = None
 if "logs" not in st.session_state:
     st.session_state.logs = []
+if "kg_poll_count" not in st.session_state:
+    st.session_state.kg_poll_count = 0
 
 def set_panel(name: str):
     st.session_state.active_panel = (
@@ -1051,6 +1053,40 @@ def render_kg():
         st.warning("Knowledge Graph not available. "
                    "Build it with: `python3 scripts/build_kg.py`")
     else:
+        # ── Dynamic build banners ──────────────────────────────
+        is_dynamic = r.get("kg_dynamic", False)
+        build_status = r.get("kg_build_status", "")
+        phase1_time = r.get("kg_build_phase1_time", 0)
+
+        if is_dynamic:
+            if build_status in ("PHASE1_COMPLETE", "PHASE2_RUNNING"):
+                st.markdown(
+                    "<div style='padding:10px 14px;background:#dbeafe;"
+                    "border-left:4px solid #2563eb;border-radius:6px;"
+                    "margin-bottom:12px;font-size:14px;'>"
+                    "🔄 <b>Building full drug profile...</b> "
+                    f"Basic data shown below (loaded in {phase1_time:.1f}s). "
+                    "Full data (interactions, co-reported drugs) will appear automatically."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+                # Auto-poll: rerun up to 5 times every 5 seconds
+                if st.session_state.kg_poll_count < 5:
+                    st.session_state.kg_poll_count += 1
+                    time.sleep(5)
+                    st.rerun()
+            elif build_status == "PHASE2_COMPLETE":
+                st.session_state.kg_poll_count = 0  # reset counter
+                st.markdown(
+                    "<div style='padding:10px 14px;background:#d1fae5;"
+                    "border-left:4px solid #059669;border-radius:6px;"
+                    "margin-bottom:12px;font-size:14px;'>"
+                    "✅ <b>Full drug profile built!</b> "
+                    "This drug was dynamically added to the Knowledge Graph. "
+                    "All data panels are now fully populated."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
         raw_ix = r.get("kg_interactions", [])
         raw_co = r.get("kg_co_reported", [])
         raw_rx = r.get("kg_reactions", [])
@@ -1086,6 +1122,16 @@ def render_kg():
             st.info("This drug is not in the Knowledge Graph seed list. "
                     "Try a more common drug, or rebuild with a larger seed.")
         else:
+            # ── Partial KG Data badge ──
+            if is_dynamic and build_status in ("PHASE1_COMPLETE", "PHASE2_RUNNING"):
+                st.markdown(
+                    "<div style='display:inline-block;padding:3px 12px;"
+                    "background:#fef3c7;border:1px solid #f59e0b;"
+                    "border-radius:20px;font-size:12px;font-weight:700;"
+                    "color:#92400e;margin-bottom:10px;'>"
+                    "⏳ Partial KG Data</div>",
+                    unsafe_allow_html=True,
+                )
             # ── Drug identity subheading ──
             kg_id = r.get("kg_identity") or {}
             queried_name = r.get("drug_name", "")

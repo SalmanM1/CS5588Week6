@@ -33,22 +33,30 @@ def _build_drug_context(drug_id: str, kg: KnowledgeGraph) -> Optional[str]:
     brands = identity.get("brand_names", [])
     brand_str = ", ".join(brands[:8]) if brands else "N/A"
 
-    interactions = kg.get_interactions(drug_id)[:5]
-    int_names = ", ".join(i["drug_name"] for i in interactions) or "none known"
+    interactions = kg.get_interactions(drug_id)
+    int_names = ", ".join(i["drug_name"] for i in interactions[:5]) or "none known"
+    int_count = len(interactions)
 
-    co_reported = kg.get_co_reported(drug_id)[:5]
-    co_names = ", ".join(c["drug_name"] for c in co_reported) or "none known"
+    co_reported = kg.get_co_reported(drug_id)
+    co_names = ", ".join(c["drug_name"] for c in co_reported[:5]) or "none known"
+    co_count = len(co_reported)
 
-    reactions = kg.get_drug_reactions(drug_id)[:5]
-    rxn_names = ", ".join(r["reaction"] for r in reactions) or "none known"
+    reactions = kg.get_drug_reactions(drug_id)
+    rxn_names = ", ".join(r["reaction"] for r in reactions[:5]) or "none known"
+    rxn_count = len(reactions)
 
     ingredients = kg.get_ingredients(drug_id)
     ing_names = ", ".join(i["ingredient"] for i in ingredients) or "N/A"
 
     disparity = kg.get_disparity_analysis(drug_id)
     emerging_lines: List[str] = []
+    disparity_score = 0.0
+    emerging_count = 0
     if disparity:
-        for sig in disparity.get("emerging_signals", [])[:5]:
+        disparity_score = disparity.get("disparity_score", 0.0)
+        emerging_signals = disparity.get("emerging_signals", [])
+        emerging_count = len(emerging_signals)
+        for sig in emerging_signals[:5]:
             emerging_lines.append(f"[EMERGING RISK] {sig['reaction']}")
 
     emerging_str = ", ".join(emerging_lines) if emerging_lines else "none detected"
@@ -57,10 +65,12 @@ def _build_drug_context(drug_id: str, kg: KnowledgeGraph) -> Optional[str]:
         "[GRAPH CONTEXT]",
         f"Drug: {generic} | RxCUI: {rxcui} | Also known as: {brand_str}",
         f"Ingredients: {ing_names}",
-        f"Interactions: {int_names}",
-        f"Adverse reactions (FAERS): {rxn_names}",
-        f"Co-reported drugs: {co_names}",
+        f"Known interactions ({int_count} total): {int_names}",
+        f"Adverse reactions (FAERS, {rxn_count} total): {rxn_names}",
+        f"Co-reported drugs ({co_count} total): {co_names}",
+        f"Disparity score: {disparity_score:.2f} | Emerging signals: {emerging_count}",
         f"Emerging risks (FAERS not on label): {emerging_str}",
+        "[END GRAPH CONTEXT]",
     ]
     return "\n".join(lines)
 

@@ -5,6 +5,11 @@ Step 4 of the KG build pipeline.
 - For each Drug node, queries FAERS count endpoints.
 - Creates CO_REPORTED_WITH edges (drug–drug from same adverse event reports).
 - Creates Reaction nodes + DRUG_CAUSES_REACTION edges.
+
+Public helpers (used by dynamic_builder):
+    build_faers_search()     — construct a FAERS search clause
+    fetch_top_reactions()    — top adverse reactions for a drug
+    fetch_co_reported_drugs()— top co-reported drugs from FAERS
 """
 
 from __future__ import annotations
@@ -48,10 +53,11 @@ def _api_get(url: str) -> dict:
 
 
 # ──────────────────────────────────────────────────────────────
-#  FAERS count queries
+#  FAERS count queries  (public API)
 # ──────────────────────────────────────────────────────────────
 
-def _build_search(generic_name: str, rxcui: Optional[str] = None) -> str:
+def build_faers_search(generic_name: str, rxcui: Optional[str] = None) -> str:
+    """Build a FAERS search clause for a drug (by generic name and optional RxCUI)."""
     name = generic_name.strip().lower()
     clauses = [f'patient.drug.openfda.generic_name:"{name}"']
     if rxcui:
@@ -59,7 +65,21 @@ def _build_search(generic_name: str, rxcui: Optional[str] = None) -> str:
     return "+OR+".join(clauses)
 
 
-def _fetch_co_reported_drugs(search: str, limit: int = 20) -> List[dict]:
+def fetch_co_reported_drugs(search: str, limit: int = 20) -> List[dict]:
+    """Fetch drugs most frequently co-reported with the target in FAERS.
+
+    Parameters
+    ----------
+    search : str
+        FAERS search clause (from :func:`build_faers_search`).
+    limit : int
+        Maximum number of co-reported drugs to return.
+
+    Returns
+    -------
+    list[dict]
+        Each dict has ``term`` (drug name) and ``count`` (report count).
+    """
     url = (
         f"{_FAERS_BASE}?search={search}"
         f"&count=patient.drug.medicinalproduct.exact&limit={limit}"
@@ -71,7 +91,21 @@ def _fetch_co_reported_drugs(search: str, limit: int = 20) -> List[dict]:
     ]
 
 
-def _fetch_top_reactions(search: str, limit: int = 25) -> List[dict]:
+def fetch_top_reactions(search: str, limit: int = 25) -> List[dict]:
+    """Fetch the most frequently reported adverse reactions for a drug from FAERS.
+
+    Parameters
+    ----------
+    search : str
+        FAERS search clause (from :func:`build_faers_search`).
+    limit : int
+        Maximum number of reactions to return.
+
+    Returns
+    -------
+    list[dict]
+        Each dict has ``term`` (MedDRA preferred term) and ``count``.
+    """
     url = (
         f"{_FAERS_BASE}?search={search}"
         f"&count=patient.reaction.reactionmeddrapt.exact&limit={limit}"
@@ -81,6 +115,12 @@ def _fetch_top_reactions(search: str, limit: int = 25) -> List[dict]:
         {"term": r.get("term", ""), "count": r.get("count", 0)}
         for r in data.get("results", [])
     ]
+
+
+# Backward-compatible aliases (internal use)
+_build_search = build_faers_search
+_fetch_co_reported_drugs = fetch_co_reported_drugs
+_fetch_top_reactions = fetch_top_reactions
 
 
 # ──────────────────────────────────────────────────────────────
@@ -109,11 +149,11 @@ def build_faers_edges(
         generic = drug["generic_name"]
         rxcui = drug.get("rxcui")
 
-        search = _build_search(generic, rxcui)
+        search = build_faers_search(generic, rxcui)
 
         # ── Co-reported drugs ──────────────────────────────────
         try:
-            co_drugs = _fetch_co_reported_drugs(search, limit=max_co_reported)
+            co_drugs = fetch_co_reported_drugs(search, limit=max_co_reported)
         except Exception:
             co_drugs = []
             failed += 1
@@ -150,7 +190,7 @@ def build_faers_edges(
 
         # ── Drug → Reaction edges ──────────────────────────────
         try:
-            reactions = _fetch_top_reactions(search, limit=max_reactions)
+            reactions = fetch_top_reactions(search, limit=max_reactions)
         except Exception:
             reactions = []
             failed += 1
@@ -163,11 +203,14 @@ def build_faers_edges(
 
             reaction_id = f"reaction:{term.lower()}"
 
-            if not backend.node_exists(reaction_id):
-                backend.upsert_node(reaction_id, "Reaction", {
-                    "reactionmeddrapt": term,
-                })
-                reaction_node_count += 1
+            # upsert_node uses MERGE semantics (INSERT ON CONFLICT UPDATE
+            # for SQLite, MERGE for Neo4j) — no need for a separate
+            # node_exists() guard; shared Reaction nodes are correctly
+            # reused across drugs, enabling true many-to-many Drug↔Reaction.
+            backend.upsert_node(reaction_id, "Reaction", {
+                "reactionmeddrapt": term,
+            })
+            reaction_node_count += 1
 
             backend.upsert_edge(node_id, reaction_id, "DRUG_CAUSES_REACTION", {
                 "source": "faers",
