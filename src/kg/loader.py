@@ -132,6 +132,58 @@ class KnowledgeGraph:
             })
         return results
 
+    def get_drugs_causing_reaction(self, reaction_term: str) -> List[Dict[str, Any]]:
+        """Return all Drug nodes linked to a Reaction via DRUG_CAUSES_REACTION.
+
+        This enables the many-to-many reverse lookup: given a reaction term,
+        find every drug that has been reported as causing it in FAERS.
+
+        Parameters
+        ----------
+        reaction_term : str
+            The MedDRA preferred term (e.g. "HEADACHE") or a reaction node ID
+            (e.g. "reaction:headache").
+
+        Returns
+        -------
+        list[dict]
+            Each dict contains ``drug_id``, ``generic_name``, ``report_count``,
+            and ``source``.
+        """
+        # Normalize to a reaction node ID
+        term = reaction_term.strip()
+        if not term:
+            return []
+        reaction_id = term if term.startswith("reaction:") else f"reaction:{term.lower()}"
+
+        # Check node exists
+        node = self._b.get_node(reaction_id)
+        if not node or node.get("type") != "Reaction":
+            return []
+
+        edges = self._b.get_edges(reaction_id, "DRUG_CAUSES_REACTION", "incoming")
+        seen_ids: set = set()
+        seen_names: set = set()
+        results = []
+        for e in edges:
+            if e["src"] in seen_ids:
+                continue
+            seen_ids.add(e["src"])
+            drug = self._b.get_node(e["src"])
+            if drug and drug.get("type") == "Drug":
+                gn = (drug.get("generic_name") or drug["id"]).lower()
+                if gn in seen_names:
+                    continue  # skip duplicate generic names (stub nodes)
+                seen_names.add(gn)
+                results.append({
+                    "drug_id": drug["id"],
+                    "generic_name": drug.get("generic_name", drug["id"]),
+                    "report_count": e.get("report_count", 0),
+                    "source": e.get("source", "faers"),
+                })
+        results.sort(key=lambda x: x.get("report_count", 0), reverse=True)
+        return results
+
     def get_ingredient_drugs(self, ingredient_name: str) -> List[Dict[str, Any]]:
         """If *ingredient_name* matches an Ingredient node, return the
         Drug nodes that contain it (via incoming HAS_ACTIVE_INGREDIENT)."""

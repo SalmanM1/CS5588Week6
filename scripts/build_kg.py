@@ -122,10 +122,52 @@ def main():
         default="neo4j",
         help="Neo4j database name (default: neo4j)",
     )
+    parser.add_argument(
+        "--drug",
+        default=None,
+        help="Build KG data for a single drug using dynamic builder "
+             "(skips full pipeline, uses expand_drug_phase1 + phase2)",
+    )
 
     args = parser.parse_args()
 
     gemini_key = args.gemini_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY", "")
+
+    # ── Single-drug build via dynamic builder ──────────────────
+    if args.drug:
+        from src.kg.dynamic_builder import (
+            expand_drug_phase1,
+            expand_drug_phase2,
+            get_build_status,
+        )
+
+        print("=" * 60)
+        print(f"  Building KG data for: {args.drug}")
+        print("=" * 60)
+        print()
+
+        print("[Phase 1] Lightweight expansion (RxNorm + NDC + top reactions)...")
+        result = expand_drug_phase1(args.drug)
+        if "error" in result:
+            print(f"  ERROR: {result['error']}")
+            sys.exit(1)
+        print(f"  → Drug node: {result['node_id']}")
+        print(f"  → Generic: {result['generic_name']}")
+        print(f"  → RxCUI: {result.get('rxcui', '—')}")
+        print(f"  → Ingredients added: {result['ingredients_added']}")
+        print(f"  → Reactions added: {result['reactions_added']}")
+        print(f"  → Elapsed: {result['elapsed_s']}s")
+        print()
+
+        print("[Phase 2] Full expansion (FAERS co-reported + label interactions + reactions)...")
+        expand_drug_phase2(args.drug)
+        status = get_build_status(args.drug)
+        print(f"  → Status: {status}")
+        print()
+        print("=" * 60)
+        print("  SINGLE-DRUG BUILD COMPLETE")
+        print("=" * 60)
+        return
 
     # ── Resolve backend kind ──────────────────────────────────
     backend_kind = args.backend

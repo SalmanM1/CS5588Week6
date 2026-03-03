@@ -668,6 +668,33 @@ class Neo4jBackend:
                     terms[term.lower()] = node_id
         return terms
 
+    def get_capacity_usage(self) -> Dict[str, Any]:
+        """Return current Neo4j capacity usage vs. Aura Free limits.
+
+        Aura Free limits (as of 2025):
+            - 200,000 nodes
+            - 400,000 relationships
+
+        Returns
+        -------
+        dict
+            Keys: ``nodes``, ``edges``, ``node_limit``, ``edge_limit``,
+            ``node_pct``, ``edge_pct``, ``within_limits``.
+        """
+        node_count = self.count_nodes()
+        edge_count = self.count_edges()
+        node_limit = 200_000
+        edge_limit = 400_000
+        return {
+            "nodes": node_count,
+            "edges": edge_count,
+            "node_limit": node_limit,
+            "edge_limit": edge_limit,
+            "node_pct": round(node_count / node_limit * 100, 2),
+            "edge_pct": round(edge_count / edge_limit * 100, 2),
+            "within_limits": node_count < node_limit and edge_count < edge_limit,
+        }
+
 
 # ══════════════════════════════════════════════════════════════
 #  Factory

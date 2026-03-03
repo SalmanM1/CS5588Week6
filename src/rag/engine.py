@@ -84,6 +84,10 @@ LOG_COLS = [
 #  RETRIEVAL HELPERS
 # ══════════════════════════════════════════════════════════════
 
+# ── Dynamic KG expansion metadata (set per-query) ────────────
+_dynamic_build_result: Dict[str, Any] = {}
+
+
 def _drug_is_known(name: str) -> bool:
     """
     Fast check: is *name* a recognised drug (via local KG then RxNorm)?
@@ -95,8 +99,12 @@ def _drug_is_known(name: str) -> bool:
     Check order:
       1. KG alias table  — O(1), local SQLite / Neo4j
       2. RxNorm exact-match + concept lookup  — 1-2 HTTP calls
-      3. If RxNorm is unreachable, return True (benefit of the doubt)
+      3. If RxNorm confirms drug but KG doesn't have it → dynamic expansion
+      4. If RxNorm is unreachable, return True (benefit of the doubt)
     """
+    global _dynamic_build_result
+    _dynamic_build_result = {}  # reset per-query
+
     try:
         kg = load_kg()
         if kg:
@@ -110,12 +118,25 @@ def _drug_is_known(name: str) -> bool:
     try:
         from src.ingestion.rxnorm import get_rxcui_by_name, get_drug_info
 
-        if get_rxcui_by_name(name):
-            return True
-        if get_drug_info(name).get("rxcuis"):
+        rxcui = get_rxcui_by_name(name)
+        drug_info = get_drug_info(name) if not rxcui else {}
+        is_known_drug = bool(rxcui or drug_info.get("rxcuis"))
+
+        if is_known_drug:
+            # Drug exists in RxNorm but not in our KG → dynamic expansion
+            try:
+                from src.kg.dynamic_builder import expand_drug_async, get_build_status
+                build_result = expand_drug_async(name)
+                _dynamic_build_result = {
+                    "kg_dynamic": True,
+                    "kg_build_status": get_build_status(name),
+                    "kg_build_phase1_time": build_result.get("elapsed_s", 0),
+                }
+            except Exception:
+                pass  # Dynamic expansion is best-effort
             return True
     except Exception:
-        return True
+        return True  # benefit of the doubt
 
     return False
 
@@ -566,4 +587,5 @@ def run_rag_query(
         "graph_enriched_chunks": n_enriched,
         "total_chunks": n_chunks,
         **kg_data,
+        **_dynamic_build_result,
     }

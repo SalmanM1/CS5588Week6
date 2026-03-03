@@ -12,6 +12,7 @@ The KG package stores drug, reaction, ingredient, and product data as a property
 src/kg/
 ├── backend.py          # GraphBackend protocol + SqliteBackend + Neo4jBackend
 ├── loader.py           # KnowledgeGraph read-only query API + load_kg()
+├── dynamic_builder.py  # On-demand KG expansion (progressive loading)
 ├── schema.py           # Backward-compat shim (delegates to backend.py)
 ├── __init__.py
 └── builders/
@@ -24,8 +25,15 @@ src/kg/
 src/rag/
 └── graph_enrichment.py  # Prepends KG context to chunks before embedding (ingestion-time)
 
+scripts/
+├── build_kg.py                  # Full KG build pipeline (+ --drug for single-drug)
+└── migrate_sqlite_to_neo4j.py   # One-time SQLite → Neo4j migration
+
 tests/
-└── test_enrichment.py   # Benchmark: plain vs graph-enriched retrieval
+├── test_enrichment.py           # Benchmark: plain vs graph-enriched retrieval
+├── test_dynamic_builder.py      # Dynamic expansion unit tests
+├── test_neo4j_backend.py        # Neo4j backend integration tests
+└── test_reverse_lookups.py      # Reverse lookup tests
 ```
 
 ## Backend Abstraction
@@ -117,6 +125,9 @@ python scripts/build_kg.py \
   --neo4j-user neo4j \
   --neo4j-password your_password \
   --max-drugs 200
+
+# Single-drug build (uses dynamic_builder)
+python scripts/build_kg.py --drug gabapentin
 ```
 
 ## Data Model
@@ -356,12 +367,44 @@ The `KnowledgeGraph` class in `loader.py` provides these methods (identical API 
 | `get_co_reported(name)` | `[{drug_id, drug_name, report_count, source}, ...]` (sorted by report count) |
 | `get_drug_reactions(name)` | `[{reaction, report_count, source}, ...]` (sorted by report count) |
 | `get_ingredients(name)` | `[{ingredient, strength, source}, ...]` |
+| `get_drugs_causing_reaction(term)` | `[{drug_id, generic_name, report_count, source}, ...]` — reverse lookup: which drugs cause this reaction |
 | `get_ingredient_drugs(name)` | `[{drug_id, generic_name, brand_names, strength}, ...]` — reverse lookup: which drugs contain this ingredient |
 | `get_label_reactions(name)` | `[{reaction, source}, ...]` |
 | `get_disparity_analysis(name)` | `{confirmed_risks, emerging_signals, unconfirmed_warnings, disparity_score}` |
 | `get_summary(name)` | Combined dict of all the above |
 
 The `name` parameter accepts generic names (`ibuprofen`), brand names (`Advil`), or RxCUI codes (`206878`). All lookups go through the alias table first.
+
+## Dynamic Expansion
+
+When a user queries a drug not in the pre-built KG, the system dynamically builds
+KG data using **two-phase progressive loading** (see `src/kg/dynamic_builder.py`):
+
+### Phase 1 — Lightweight (~2-5s, synchronous)
+
+- RxNorm resolution → Drug node
+- NDC ingredient lookup → Ingredient nodes + edges
+- FAERS top 10 reactions → Reaction nodes + edges
+
+Result: basic drug profile available immediately for RAG and frontend.
+
+### Phase 2 — Full build (~20-60s, background thread)
+
+- Full FAERS co-reported drugs (50 max)
+- Label interaction edges (Gemini or regex)
+- Label reaction warnings (for disparity analysis)
+
+### Integration Points
+
+1. `engine.py:_drug_is_known()` triggers `expand_drug_async()` when RxNorm confirms the drug
+2. Phase 1 completes synchronously → basic KG data available for the current query
+3. Phase 2 runs in a daemon thread → full data for subsequent queries
+4. Frontend shows build status banners and auto-polls for completion
+
+### Build Status
+
+`get_build_status(drug_name)` returns one of:
+`NOT_STARTED` → `PHASE1_RUNNING` → `PHASE1_COMPLETE` → `PHASE2_RUNNING` → `PHASE2_COMPLETE` (or `FAILED`)
 
 ## Graph Enrichment Benchmark
 
