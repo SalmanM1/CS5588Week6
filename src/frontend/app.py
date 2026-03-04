@@ -140,6 +140,13 @@ with col2:
         st.switch_page("pages/primary_demo.py")
 
     if st.button(
+        "🤖 **Agent Chat**  \n*AI-powered multi-step drug safety reasoning*",
+        key="nav_agent",
+        use_container_width=True,
+    ):
+        st.switch_page("pages/agent_chat.py")
+
+    if st.button(
         "📊 **Signal Heatmap Dashboard**  \n*Analyst disparity and signal visualization*",
         key="nav_heatmap",
         use_container_width=True,

@@ -281,38 +281,38 @@ class KnowledgeGraph:
 # ──────────────────────────────────────────────────────────────
 #  Module-level loader (with graceful degradation)
 # ──────────────────────────────────────────────────────────────
+#
+#  No caching for SQLite: Streamlit runs each request in a different thread,
+#  and SQLite connections cannot be shared across threads. Creating a fresh
+#  connection per load_kg() call guarantees thread safety. Neo4j is cached
+#  since it uses a network driver that is thread-safe.
+# ──────────────────────────────────────────────────────────────
 
-_KG_INSTANCE: Optional[KnowledgeGraph] = None
-_KG_LOADED: bool = False
+_neo4j_instance: Optional[KnowledgeGraph] = None
 
 
 def load_kg(path: str = _DEFAULT_KG_PATH) -> Optional[KnowledgeGraph]:
     """
     Load the Knowledge Graph from the configured backend.
 
-    - If ``NEO4J_URI`` env-var is set → Neo4j backend.
-    - Otherwise → SQLite file at *path* (must exist).
+    - If ``NEO4J_URI`` env-var is set → Neo4j backend (cached).
+    - Otherwise → SQLite file at *path* (fresh connection per call, for thread safety).
 
     Returns ``None`` when the backend is unavailable (graceful degradation).
-    The result is cached: subsequent calls return the same instance.
     """
-    global _KG_INSTANCE, _KG_LOADED
-
-    if _KG_LOADED:
-        return _KG_INSTANCE
-
-    _KG_LOADED = True
+    global _neo4j_instance
 
     try:
         if os.environ.get("NEO4J_URI"):
-            backend = create_backend("neo4j")
+            if _neo4j_instance is None:
+                backend = create_backend("neo4j")
+                _neo4j_instance = KnowledgeGraph(backend)
+            return _neo4j_instance
         elif os.path.exists(path):
+            # Fresh connection every call: SQLite + Streamlit = different thread per request
             backend = create_backend("sqlite", sqlite_path=path, readonly=True)
+            return KnowledgeGraph(backend)
         else:
-            _KG_INSTANCE = None
             return None
-        _KG_INSTANCE = KnowledgeGraph(backend)
     except Exception:
-        _KG_INSTANCE = None
-
-    return _KG_INSTANCE
+        return None

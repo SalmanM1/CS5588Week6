@@ -115,14 +115,15 @@ class SqliteBackend:
         readonly: bool = False,
     ):
         self._path = path
+        # check_same_thread=False allows connection reuse across Streamlit worker threads
         if readonly:
             uri = f"file:{path}?mode=ro"
-            self._conn = sqlite3.connect(uri, uri=True)
+            self._conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
         else:
             parent = os.path.dirname(path)
             if parent:
                 os.makedirs(parent, exist_ok=True)
-            self._conn = sqlite3.connect(path)
+            self._conn = sqlite3.connect(path, check_same_thread=False)
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=OFF")
             self._conn.executescript(_SCHEMA_SQL)
